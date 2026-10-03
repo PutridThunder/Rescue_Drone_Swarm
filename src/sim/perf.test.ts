@@ -31,7 +31,7 @@ describe('performance (218x167 grid)', () => {
     expect(replanMs).toBeLessThan(10);
   });
 
-  it('default config completes a full demo run in 2-4 simulated minutes', () => {
+  it('default config completes a full demo run in under 10 simulated minutes', () => {
     const sim = new Simulation(world, structuredClone(DEFAULT_CONFIG));
     const counts: Record<string, number> = {};
     const t0 = performance.now();
@@ -47,6 +47,6 @@ describe('performance (218x167 grid)', () => {
     );
     expect(m.complete).toBe(true);
     expect(m.time).toBeGreaterThan(100);
-    expect(m.time).toBeLessThan(300);
+    expect(m.time).toBeLessThan(600);
   });
 });

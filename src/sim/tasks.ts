@@ -54,7 +54,7 @@ export function buildSectors(width: number, height: number, size = SECTOR_SIZE):
         name: sectorName(col, row),
         exhausted: false,
         boost: 0,
-        view: { id, x0, y0, x1, y1, priority: 0, breakdown: {}, assignedDrone: null, searchedFrac: 0, isFrontier: false },
+        view: { id, x0, y0, x1, y1, label: sectorName(col, row), priority: 0, breakdown: {}, assignedDrone: null, searchedFrac: 0, isFrontier: false },
       });
     }
   }

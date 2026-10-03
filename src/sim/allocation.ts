@@ -24,8 +24,7 @@ export interface AllocParams {
   weights: Weights;
   diag: number;
   capacity: number;
-  baseX: number;
-  baseY: number;
+  homes: { x: number; y: number }[]; // charging trucks
   hysteresis: number;
   releasedBonus: number;
   spread: number; // redundancy kernel radius, cells
@@ -55,7 +54,7 @@ export function allocate(drones: AllocDrone[], tasks: AllocTask[], p: AllocParam
   const nT = tasks.length;
   const redundancy = new Float64Array(nT);
   const taken = new Uint8Array(nT);
-  const backDist = tasks.map((t) => Math.hypot(t.cx - p.baseX, t.cy - p.baseY) * DETOUR);
+  const backDist = tasks.map((t) => nearestHome(p.homes, t.cx, t.cy) * DETOUR);
   const remaining = drones.slice();
   const out: Assignment[] = [];
   const distScale = Math.max(1, 0.5 * p.diag);
@@ -100,4 +99,10 @@ export function allocate(drones: AllocDrone[], tasks: AllocTask[], p: AllocParam
     }
   }
   return out;
+}
+
+export function nearestHome(homes: { x: number; y: number }[], x: number, y: number): number {
+  let best = Infinity;
+  for (const h of homes) best = Math.min(best, Math.hypot(h.x - x, h.y - y));
+  return best;
 }

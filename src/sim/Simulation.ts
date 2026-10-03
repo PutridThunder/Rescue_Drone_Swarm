@@ -1,4 +1,5 @@
 import type {
+  CrowdView,
   FloodState,
   InfoModes,
   ISimulation,
@@ -9,7 +10,7 @@ import type {
   SurvivorView,
   World,
 } from '../types';
-import { allocate, DETOUR, type AllocDrone, type AllocTask } from './allocation';
+import { allocate, DETOUR, nearestHome, type AllocDrone, type AllocTask } from './allocation';
 import { AStar, lineOfSight, smoothPath } from './astar';
 import { Drone } from './drone';
 import { updateFrontier } from './frontier';
@@ -19,19 +20,28 @@ import { computeTerms, emptyAgg, normalizedPriorities, rescueWeight, type Sector
 import { Rng } from './rng';
 import { clamp01, computeFloodMask, computeHazardTruth, estimateHazard, sampleSurvivors } from './scenario';
 import { buildSectors, insideSector, SECTOR_DONE, sectorAt, type Sector } from './tasks';
+import { Truck } from './truck';
 
 const WATER = 0;
-export const SEARCHED_THRESHOLD = 0.6;
+const ROAD = 2;
+export const SEARCHED_THRESHOLD = 0.8;
 const REPLAN_INTERVAL = 1.5; // s
-const CRUISE_ALT_M = 45; // buildings taller than this are obstacles
 const CHARGE_TIME = 4; // s, empty -> full
 const HOVER_DRAIN = 0.15; // cells of battery per second aloft
 const HYSTERESIS = 0.15;
-const RELEASED_BONUS = 0.1;
-const DETECT_PROB = 0.9; // scales per-observation gain into detection probability
+const RELEASED_BONUS = 0.4; // a block abandoned by a failed drone should be picked up promptly
+const DETECT_PROB = 0.97; // scales per-observation gain into detection probability
 const REVISIT_GAP = 5; // s; re-observation after this long counts as a new visit
 const MAX_SUBSTEP_CELLS = 0.5;
 const HAZARD_PATH_COST = 0.5;
+const TRUCK_SPEED_FRAC = 0.35; // truck speed relative to drones
+const TRUCK_REPLAN = 6; // s between truck repositioning decisions
+const TRUCK_MOVE_MIN = 15; // cells; don't bother relocating for less
+const DOCK_DIST = 0.6; // cells
+const FACADE_GAIN = 0.6; // looking at a high-rise from the street is less thorough than overflying
+const CROWD_RADIUS = 3; // cells
+const CROWD_PEOPLE = 60;
+const CROWD_SURVIVORS = 3;
 
 interface Change {
   drone: Drone;
@@ -69,7 +79,17 @@ export class Simulation implements ISimulation {
   private readonly sectors: Sector[];
   private readonly sectorCols: number;
   private readonly drones: Drone[];
+  private readonly trucks: Truck[];
   private readonly acc = new MetricsAccumulator();
+  /** Population prior (world copy; user-planted crowds add to it). */
+  private readonly pop: Float32Array;
+  /** Cells no sensor can see (inside high-rises): excluded from coverage like water. */
+  private readonly hidden: Uint8Array;
+  private readonly truckBlocked: Uint8Array;
+  private readonly roadCells: number[] = [];
+  private truckTimer = 0;
+  private nextSurvivorId: number;
+  private nextCrowdId = 1;
   private readonly baseX: number;
   private readonly baseY: number;
   private readonly margin: number;
@@ -79,6 +99,7 @@ export class Simulation implements ISimulation {
   private replanReasons: string[] = [];
   private announceReplan = false;
   private readonly released = new Map<number, number>(); // sector id -> drone that released it
+  private readonly releasedPriority = new Map<number, number>(); // priority it was assigned at
   private obstacleDiscovered = false;
 
   constructor(world: World, config: SimConfig) {
@@ -95,30 +116,38 @@ export class Simulation implements ISimulation {
     this.floodMask = tsunami ? computeFloodMask(world, cfg.tsunamiRunupM) : null;
     this.floodProne = new Uint8Array(N);
 
-    const survivors = sampleSurvivors(world, cfg.survivorCount, this.rng, this.hazardTruth);
-    this.hasSurvivor = new Uint8Array(N);
-    for (const s of survivors) {
-      const i = Math.floor(s.y) * W + Math.floor(s.x);
-      this.hasSurvivor[i] = 1;
-      const list = this.survivorAt.get(i);
-      if (list) list.push(s);
-      else this.survivorAt.set(i, [s]);
+    this.pop = Float32Array.from(world.population);
+    this.tall = new Uint8Array(N);
+    for (let i = 0; i < N; i++) if (world.buildingHeight[i] > cfg.flightAltitudeM) this.tall[i] = 1;
+    this.hidden = new Uint8Array(N);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (!this.tall[i]) continue;
+        const open = (j: number, ok: boolean) => ok && !this.tall[j];
+        if (!(open(i - 1, x > 0) || open(i + 1, x < W - 1) || open(i - W, y > 0) || open(i + W, y < H - 1))) this.hidden[i] = 1;
+      }
     }
+    const allowed = new Uint8Array(N);
+    for (let i = 0; i < N; i++) allowed[i] = this.hidden[i] ? 0 : 1;
+
+    const survivors = sampleSurvivors(world, cfg.survivorCount, this.rng, this.hazardTruth, allowed);
+    this.nextSurvivorId = survivors.length + 1;
+    this.hasSurvivor = new Uint8Array(N);
+    for (const s of survivors) this.indexSurvivor(s);
 
     this.k = new Knowledge(N);
     this.disc = buildSensorDisc(cfg.sensorRange);
     this.astar = new AStar(W, H);
-    this.tall = new Uint8Array(N);
     this.navBlocked = new Uint8Array(N);
     this.unreachable = new Uint8Array(N);
     this.navCostBuf = new Float32Array(N);
 
     let popTotal = 0;
     for (let i = 0; i < N; i++) {
-      if (world.buildingHeight[i] > CRUISE_ALT_M) this.tall[i] = 1;
-      if (world.terrain[i] !== WATER) {
+      if (world.terrain[i] !== WATER && !this.hidden[i]) {
         this.acc.searchableCells++;
-        popTotal += world.population[i];
+        popTotal += this.pop[i];
       }
     }
     this.popFloor = this.acc.searchableCells > 0 ? (0.1 * popTotal) / this.acc.searchableCells : 0;
@@ -126,13 +155,19 @@ export class Simulation implements ISimulation {
     const { sectors, cols } = buildSectors(W, H);
     this.sectors = sectors;
     this.sectorCols = cols;
+    for (const s of sectors) s.view.label = this.streetLabel(s) ?? `Block ${s.name}`;
 
     this.baseX = world.base.x + 0.5;
     this.baseY = world.base.y + 0.5;
     this.margin = 0.04 * cfg.batteryCapacity + 3;
+    this.truckBlocked = new Uint8Array(N).fill(1);
+    this.trucks = this.spawnTrucks(Math.max(1, cfg.truckCount));
     this.drones = [];
     for (let i = 0; i < cfg.droneCount; i++) {
-      this.drones.push(new Drone(i + 1, this.baseX, this.baseY, cfg.sensorRange, cfg.batteryCapacity));
+      const t = this.trucks[i % this.trucks.length];
+      const d = new Drone(i + 1, t.x, t.y, cfg.sensorRange, cfg.batteryCapacity);
+      d.dockedTruck = t.id;
+      this.drones.push(d);
     }
 
     const flood: FloodState | null = tsunami
@@ -145,6 +180,8 @@ export class Simulation implements ISimulation {
       config: cfg,
       knowledge: this.k.view,
       drones: this.drones,
+      trucks: this.trucks,
+      crowds: [],
       tasks: [],
       survivors,
       flood,
@@ -170,11 +207,19 @@ export class Simulation implements ISimulation {
   }
 
   step(dt: number): void {
-    if (this.state.metrics.complete || dt <= 0) return;
+    if (dt <= 0) return;
+    const st = this.state;
+    if (st.metrics.complete) {
+      // Mission over: keep flying until every drone has landed on a truck.
+      if (!this.drones.some((d) => d.airborne)) {
+        st.running = false;
+        return;
+      }
+    }
     const n = Math.max(1, Math.ceil((dt * this.fixed.speed) / MAX_SUBSTEP_CELLS));
     const h = dt / n;
-    for (let i = 0; i < n && !this.state.metrics.complete; i++) this.subStep(h);
-    this.updateMetrics();
+    for (let i = 0; i < n; i++) this.subStep(h);
+    if (!st.metrics.complete) this.updateMetrics();
   }
 
   drainEvents(): SimEvent[] {
@@ -190,15 +235,17 @@ export class Simulation implements ISimulation {
   disableDrone(id?: number): number | null {
     const active = this.drones.filter((d) => d.active);
     if (active.length === 0) return null;
-    const d = id == null ? active[this.rng.int(active.length)] : active.find((x) => x.id === id);
+    const pool = active.filter((x) => x.airborne);
+    const d = id == null ? (pool.length ? pool : active)[this.rng.int((pool.length ? pool : active).length)] : active.find((x) => x.id === id);
     if (!d) return null;
     const s = d.taskId != null ? this.sectors[d.taskId] : null;
     if (s) this.releaseTask(d);
     d.status = 'DISABLED';
     d.path = [];
     d.charging = false;
+    d.dockedTruck = null;
     this.state.metrics.droneFailures++;
-    this.emit('failure', `Drone ${d.id} DISABLED — ${s ? `Sector ${s.name} released, ` : ''}fleet replanning`, d.id, s?.id);
+    this.emit('failure', `Drone ${d.id} went down${s ? ` — ${s.view.label} handed back to the fleet` : ''}`, d.id, s?.id);
     if (!this.state.metrics.complete) {
       this.replanReasons.push(`Drone ${d.id} lost`);
       this.announceReplan = true;
@@ -236,7 +283,246 @@ export class Simulation implements ISimulation {
   }
 
   sectorName(taskId: number): string {
-    return this.sectors[taskId]?.name ?? `#${taskId}`;
+    return this.sectors[taskId]?.view.label ?? `#${taskId}`;
+  }
+
+  /** Plant a survivor (ground truth only — the fleet has to find them). */
+  addSurvivor(x: number, y: number): SurvivorView | null {
+    const i = this.cellIndex(x, y);
+    if (i < 0 || this.world.terrain[i] === WATER || this.hidden[i]) return null;
+    const s: SurvivorView = {
+      id: this.nextSurvivorId++,
+      x,
+      y,
+      found: false,
+      foundBy: null,
+      foundAt: null,
+      lost: false,
+      placed: true,
+    };
+    this.state.survivors.push(s);
+    this.indexSurvivor(s);
+    this.state.metrics.survivorsTotal++;
+    return s;
+  }
+
+  /**
+   * Plant a crowd: a reported gathering the fleet knows about (population prior, used when
+   * population intel is on) with a few people actually there to be found.
+   */
+  addCrowd(x: number, y: number): CrowdView | null {
+    const i = this.cellIndex(x, y);
+    if (i < 0 || this.world.terrain[i] === WATER) return null;
+    const cells = this.cellsAround(x, y, CROWD_RADIUS);
+    if (cells.length === 0) return null;
+    for (const j of cells) this.pop[j] += CROWD_PEOPLE / cells.length;
+    const crowd: CrowdView = { id: this.nextCrowdId++, x, y, radius: CROWD_RADIUS, people: CROWD_PEOPLE };
+    this.state.crowds.push(crowd);
+    this.state.metrics.populationTotal += CROWD_PEOPLE;
+    for (let k = 0; k < CROWD_SURVIVORS; k++) {
+      const j = cells[this.rng.int(cells.length)];
+      this.addSurvivor((j % this.W) + this.rng.range(0.2, 0.8), Math.floor(j / this.W) + this.rng.range(0.2, 0.8));
+    }
+    const label = this.sectors[sectorAt(x, y, this.sectorCols)].view.label;
+    if (!this.state.metrics.complete) {
+      this.replanReasons.push(`crowd reported near ${label}`);
+      this.announceReplan = true;
+    }
+    this.emit('placed', `Crowd of ~${CROWD_PEOPLE} reported near ${label}`);
+    return crowd;
+  }
+
+  /** Remove user-planted survivors and crowds within `radius` cells. Returns how many were removed. */
+  removeNear(x: number, y: number, radius: number): number {
+    const st = this.state;
+    let removed = 0;
+    const r2 = radius * radius;
+    for (let k = st.crowds.length - 1; k >= 0; k--) {
+      const c = st.crowds[k];
+      if ((c.x - x) ** 2 + (c.y - y) ** 2 > r2) continue;
+      const cells = this.cellsAround(c.x, c.y, c.radius);
+      for (const j of cells) this.pop[j] = Math.max(this.world.population[j], this.pop[j] - c.people / cells.length);
+      st.metrics.populationTotal -= c.people;
+      st.crowds.splice(k, 1);
+      removed++;
+    }
+    for (let k = st.survivors.length - 1; k >= 0; k--) {
+      const s = st.survivors[k];
+      if (!s.placed || s.found || s.lost || (s.x - x) ** 2 + (s.y - y) ** 2 > r2) continue;
+      const i = this.cellIndex(s.x, s.y);
+      const list = this.survivorAt.get(i)!.filter((o) => o !== s);
+      if (list.length) this.survivorAt.set(i, list);
+      else {
+        this.survivorAt.delete(i);
+        this.hasSurvivor[i] = 0;
+      }
+      st.survivors.splice(k, 1);
+      st.metrics.survivorsTotal--;
+      removed++;
+    }
+    return removed;
+  }
+
+  private cellIndex(x: number, y: number): number {
+    const cx = Math.floor(x);
+    const cy = Math.floor(y);
+    return cx < 0 || cy < 0 || cx >= this.W || cy >= this.H ? -1 : cy * this.W + cx;
+  }
+
+  private cellsAround(x: number, y: number, r: number): number[] {
+    const out: number[] = [];
+    for (let cy = Math.floor(y - r); cy <= Math.floor(y + r); cy++) {
+      for (let cx = Math.floor(x - r); cx <= Math.floor(x + r); cx++) {
+        if (cx < 0 || cy < 0 || cx >= this.W || cy >= this.H) continue;
+        if ((cx + 0.5 - x) ** 2 + (cy + 0.5 - y) ** 2 > r * r) continue;
+        const i = cy * this.W + cx;
+        if (this.world.terrain[i] !== WATER && !this.hidden[i]) out.push(i);
+      }
+    }
+    return out;
+  }
+
+  private indexSurvivor(s: SurvivorView) {
+    const i = Math.floor(s.y) * this.W + Math.floor(s.x);
+    this.hasSurvivor[i] = 1;
+    const list = this.survivorAt.get(i);
+    if (list) list.push(s);
+    else this.survivorAt.set(i, [s]);
+  }
+
+  /** "Lonsdale Ave & W 3rd St" from the two most common street names in and around the block. */
+  private streetLabel(s: Sector): string | null {
+    const { roadName, roadNames } = this.world;
+    if (!roadNames.length) return null;
+    const counts = new Map<number, number>();
+    for (let y = Math.max(0, s.y0 - 2); y < Math.min(this.H, s.y1 + 2); y++) {
+      for (let x = Math.max(0, s.x0 - 2); x < Math.min(this.W, s.x1 + 2); x++) {
+        const n = roadName[y * this.W + x];
+        if (n >= 0) counts.set(n, (counts.get(n) ?? 0) + 1);
+      }
+    }
+    const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2);
+    if (top.length === 0) return null;
+    if (top.length === 1) return roadNames[top[0][0]];
+    return `${roadNames[top[0][0]]} & ${roadNames[top[1][0]]}`;
+  }
+
+  /** Trucks start near the staging area on the connected road network, spaced apart. */
+  private spawnTrucks(count: number): Truck[] {
+    const { terrain } = this.world;
+    const W = this.W;
+    const N = this.N;
+    let start = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < N; i++) {
+      if (terrain[i] !== ROAD) continue;
+      const d = ((i % W) + 0.5 - this.baseX) ** 2 + (Math.floor(i / W) + 0.5 - this.baseY) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        start = i;
+      }
+    }
+    const trucks: Truck[] = [];
+    if (start < 0) {
+      // No roads (synthetic worlds): trucks can park anywhere on open land.
+      for (let i = 0; i < N; i++) {
+        if (terrain[i] !== WATER && !this.tall[i]) {
+          this.truckBlocked[i] = 0;
+          this.roadCells.push(i);
+        }
+      }
+      for (let k = 0; k < count; k++) trucks.push(new Truck(k + 1, this.baseX, this.baseY));
+      return trucks;
+    }
+    const order: number[] = [start];
+    this.truckBlocked[start] = 0;
+    for (let q = 0; q < order.length; q++) {
+      const i = order[q];
+      const x = i % W;
+      const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W];
+      for (const j of nb) {
+        if (j < 0 || j >= N || !this.truckBlocked[j] || terrain[j] !== ROAD) continue;
+        this.truckBlocked[j] = 0;
+        order.push(j);
+      }
+    }
+    this.roadCells.push(...order);
+    // BFS order is road distance from staging; space the trucks out along it.
+    for (let k = 0; k < count; k++) {
+      const i = order[Math.min(order.length - 1, k * 60)];
+      trucks.push(new Truck(k + 1, (i % W) + 0.5, Math.floor(i / W) + 0.5));
+    }
+    return trucks;
+  }
+
+  /**
+   * Move trucks toward where the work is: weighted k-means over the active and highest-priority
+   * blocks, snapped to the road network, so drones spend less battery commuting.
+   */
+  private repositionTrucks() {
+    this.truckTimer = TRUCK_REPLAN;
+    const tasks = this.state.tasks;
+    if (tasks.length === 0 || this.roadCells.length === 0) return;
+    const pts: { x: number; y: number; w: number }[] = [];
+    for (const t of tasks) {
+      const w = t.assignedDrone != null ? 1.5 : t.priority > 0.5 ? t.priority : 0;
+      if (w > 0) pts.push({ x: (t.x0 + t.x1) / 2, y: (t.y0 + t.y1) / 2, w });
+    }
+    if (pts.length === 0) return;
+    const cs = this.trucks.map((t) => ({ x: t.x, y: t.y }));
+    for (let iter = 0; iter < 6; iter++) {
+      const sx = cs.map(() => 0);
+      const sy = cs.map(() => 0);
+      const sw = cs.map(() => 0);
+      for (const p of pts) {
+        let k = 0;
+        let bd = Infinity;
+        cs.forEach((c, ci) => {
+          const d = (c.x - p.x) ** 2 + (c.y - p.y) ** 2;
+          if (d < bd) {
+            bd = d;
+            k = ci;
+          }
+        });
+        sx[k] += p.x * p.w;
+        sy[k] += p.y * p.w;
+        sw[k] += p.w;
+      }
+      cs.forEach((c, ci) => {
+        if (sw[ci] > 0) {
+          c.x = sx[ci] / sw[ci];
+          c.y = sy[ci] / sw[ci];
+        }
+      });
+    }
+    this.trucks.forEach((t, k) => {
+      const target = this.nearestRoadCell(cs[k].x, cs[k].y);
+      const tx = target % this.W;
+      const ty = Math.floor(target / this.W);
+      const ref = t.goal ?? t;
+      if (Math.hypot(tx + 0.5 - ref.x, ty + 0.5 - ref.y) < TRUCK_MOVE_MIN) return;
+      const cells = this.astar.find(Math.floor(t.x), Math.floor(t.y), tx, ty, this.truckBlocked, null);
+      if (!cells || cells.length < 2) return;
+      t.path = cells.map((c) => ({ x: (c % this.W) + 0.5, y: Math.floor(c / this.W) + 0.5 }));
+      t.goal = { x: tx + 0.5, y: ty + 0.5 };
+      t.status = 'DRIVING';
+      const label = this.sectors[sectorAt(tx, ty, this.sectorCols)].view.label;
+      const km = ((cells.length * this.world.meta.cellSizeM) / 1000).toFixed(1);
+      this.emit('truck', `Truck ${t.id} driving ${km} km to ${label} — closer to where the drones are working`);
+    });
+  }
+
+  private nearestRoadCell(x: number, y: number): number {
+    let best = this.roadCells[0];
+    let bd = Infinity;
+    for (const i of this.roadCells) {
+      const d = ((i % this.W) + 0.5 - x) ** 2 + (Math.floor(i / this.W) + 0.5 - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------------------
@@ -254,14 +540,19 @@ export class Simulation implements ISimulation {
       flood.timeToImpact = this.fixed.tsunamiImpactTime - st.time;
     }
 
+    const truckStep = this.fixed.speed * TRUCK_SPEED_FRAC * h;
+    for (const t of this.trucks) t.advance(truckStep);
     for (const d of this.drones) this.updateDrone(d, h);
     if (this.obstacleDiscovered) {
       this.obstacleDiscovered = false;
       this.repathBlocked();
     }
+    if (st.metrics.complete) return;
 
     this.replanTimer -= h;
     if (this.replanReasons.length > 0 || this.replanTimer <= 0) this.replan();
+    this.truckTimer -= h;
+    if (this.truckTimer <= 0 && !st.metrics.complete) this.repositionTrucks();
   }
 
   private updateDrone(d: Drone, h: number) {
@@ -269,24 +560,34 @@ export class Simulation implements ISimulation {
     this.acc.activeTime += h;
     if (d.status === 'TRAVELLING' || d.status === 'SEARCHING') this.acc.busyTime += h;
 
-    if (d.charging) {
-      d.batteryCells = Math.min(d.capacity, d.batteryCells + (d.capacity / CHARGE_TIME) * h);
-      d.battery = d.batteryCells / d.capacity;
-      if (d.batteryCells >= d.capacity) {
-        d.charging = false;
-        if (d.chargeFrom < 0.8) this.emit('recharged', `Drone ${d.id} recharged — rejoining the search pool`, d.id);
-        this.replanTimer = 0;
+    if (d.dockedTruck !== null && !d.charging && (d.status === 'TRAVELLING' || d.status === 'SEARCHING')) {
+      d.dockedTruck = null; // take off for the assigned block
+    }
+    if (d.dockedTruck !== null) {
+      // Landed: ride along with the truck, charge if needed.
+      const t = this.trucks[d.dockedTruck - 1];
+      d.x = t.x;
+      d.y = t.y;
+      d.heading = t.heading;
+      if (d.charging) {
+        d.batteryCells = Math.min(d.capacity, d.batteryCells + (d.capacity / CHARGE_TIME) * h);
+        d.battery = d.batteryCells / d.capacity;
+        if (d.batteryCells >= d.capacity) {
+          d.charging = false;
+          d.status = 'IDLE';
+          if (d.chargeFrom < 0.8) this.emit('recharged', `Drone ${d.id} recharged on Truck ${t.id} — ready to launch`, d.id);
+          this.replanTimer = 0;
+        }
       }
       return;
     }
 
-    const atBase = this.atBase(d);
-    if (d.status === 'TRAVELLING' || d.status === 'SEARCHING' || (d.status === 'IDLE' && !atBase)) {
-      if (d.batteryCells < this.distToBase(d) * DETOUR + this.margin) this.lowBattery(d);
+    if (d.status === 'TRAVELLING' || d.status === 'SEARCHING' || d.status === 'IDLE') {
+      if (d.batteryCells < this.distToTruck(d) * DETOUR + this.margin) this.lowBattery(d);
     }
 
     const moved = d.advance(this.fixed.speed * h);
-    const used = moved + (d.status === 'IDLE' && atBase ? 0 : HOVER_DRAIN * h);
+    const used = moved + HOVER_DRAIN * h;
     d.drain(used);
     this.acc.batteryCells += used;
 
@@ -311,20 +612,27 @@ export class Simulation implements ISimulation {
         if (d.path.length === 0) this.searchNext(d);
         break;
       case 'RETURNING':
-      case 'LOW_BATTERY':
-        if (d.path.length === 0) {
-          if (this.atBase(d)) this.arriveBase(d);
-          else this.pathHome(d);
-        }
+      case 'LOW_BATTERY': {
+        const t = this.nearestTruck(d.x, d.y);
+        if (Math.hypot(t.x - d.x, t.y - d.y) < DOCK_DIST) this.dock(d, t);
+        else if (d.path.length === 0 || this.goalDrifted(d, t)) this.pathHome(d);
+        break;
+      }
+      case 'IDLE':
+        // Airborne with nothing to do: go land.
+        d.status = 'RETURNING';
+        this.pathHome(d);
         break;
     }
   }
 
   /** Sensor sweep: mark geography known, accumulate search confidence, roll for survivor detection. */
   private observe(d: Drone) {
-    const { dx, dy, gain } = this.disc;
+    const { dx, dy, gain, rayStart, rayX, rayY } = this.disc;
     const { known, searched, lastObsT, lastObsDrone } = this.k;
-    const { terrain, population } = this.world;
+    const terrain = this.world.terrain;
+    const population = this.pop;
+    const tall = this.tall;
     const W = this.W;
     const H = this.H;
     const t = this.state.time;
@@ -335,6 +643,17 @@ export class Simulation implements ISimulation {
       const y = cy + dy[j];
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const i = y * W + x;
+      if (this.hidden[i]) continue;
+      let blocked = false;
+      for (let r = rayStart[j]; r < rayStart[j + 1]; r++) {
+        const rx = cx + rayX[r];
+        const ry = cy + rayY[r];
+        if (rx >= 0 && ry >= 0 && rx < W && ry < H && tall[ry * W + rx]) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) continue; // high-rise in the way
       if (!known[i]) {
         known[i] = 1;
         this.k.markDirty(i);
@@ -344,7 +663,7 @@ export class Simulation implements ISimulation {
         }
       }
       const before = searched[i];
-      const p = gain[j];
+      const p = tall[i] ? gain[j] * FACADE_GAIN : gain[j];
       const after = before + (1 - before) * p;
       searched[i] = after;
       if (((before * 16) | 0) !== ((after * 16) | 0)) this.k.markDirty(i);
@@ -381,11 +700,11 @@ export class Simulation implements ISimulation {
       }
       this.emit(
         'survivor',
-        `Survivor #${s.id} found by Drone ${d.id} in Sector ${sec.name} — boosting nearby sectors (survivors cluster)`,
+        `Survivor found by Drone ${d.id} near ${sec.view.label} — checking the surrounding blocks next`,
         d.id,
         sec.id,
       );
-      this.replanReasons.push(`survivor found in ${sec.name}`);
+      this.replanReasons.push(`survivor found near ${sec.view.label}`);
     }
   }
 
@@ -408,7 +727,7 @@ export class Simulation implements ISimulation {
     for (let y = s.y0; y < s.y1; y++) {
       for (let x = s.x0; x < s.x1; x++) {
         const i = y * W + x;
-        if (known[i] && terrain[i] === WATER) continue;
+        if ((known[i] && terrain[i] === WATER) || this.hidden[i]) continue;
         believed++;
         if (searched[i] >= SEARCHED_THRESHOLD) {
           done++;
@@ -445,7 +764,7 @@ export class Simulation implements ISimulation {
       for (let y = s.y0; y < s.y1; y++) {
         for (let x = s.x0; x < s.x1; x++) {
           const i = y * W + x;
-          if ((known[i] && terrain[i] === WATER) || this.navBlocked[i] || this.unreachable[i]) continue;
+          if ((known[i] && terrain[i] === WATER) || this.navBlocked[i] || this.unreachable[i] || this.hidden[i]) continue;
           const dist = Math.hypot(x + 0.5 - d.x, y + 0.5 - d.y) + (searched[i] >= SEARCHED_THRESHOLD ? 1000 : 0);
           if (dist < bestD) {
             bestD = dist;
@@ -475,23 +794,45 @@ export class Simulation implements ISimulation {
   }
 
   private pathHome(d: Drone) {
-    if (!this.planPath(d, this.world.base.x, this.world.base.y)) d.path = [{ x: this.baseX, y: this.baseY }];
+    const t = this.nearestTruck(d.x, d.y);
+    if (!this.planPath(d, Math.floor(t.x), Math.floor(t.y))) d.path = [];
+    d.path.push({ x: t.x, y: t.y });
   }
 
-  private atBase(d: Drone): boolean {
-    return this.distToBase(d) < 0.3;
+  /** Re-route when the truck we're flying to has moved away from our path's end. */
+  private goalDrifted(d: Drone, t: Truck): boolean {
+    const end = d.path[d.path.length - 1];
+    return !end || Math.hypot(end.x - t.x, end.y - t.y) > 1.5;
   }
 
-  private distToBase(d: Drone): number {
-    return Math.hypot(d.x - this.baseX, d.y - this.baseY);
+  private nearestTruck(x: number, y: number): Truck {
+    let best = this.trucks[0];
+    let bestD = Infinity;
+    for (const t of this.trucks) {
+      const dd = Math.hypot(t.x - x, t.y - y);
+      if (dd < bestD) {
+        bestD = dd;
+        best = t;
+      }
+    }
+    return best;
   }
 
-  private arriveBase(d: Drone) {
+  private distToTruck(d: Drone): number {
+    return nearestHome(this.trucks, d.x, d.y);
+  }
+
+  private dock(d: Drone, t: Truck) {
     d.path = [];
-    d.status = 'IDLE';
+    d.x = t.x;
+    d.y = t.y;
+    d.dockedTruck = t.id;
     if (d.battery < 0.98) {
       d.charging = true;
       d.chargeFrom = d.battery;
+      d.status = 'CHARGING';
+    } else {
+      d.status = 'IDLE';
     }
     this.replanTimer = Math.min(this.replanTimer, 0.25);
   }
@@ -501,9 +842,10 @@ export class Simulation implements ISimulation {
     if (s) this.releaseTask(d);
     d.status = 'LOW_BATTERY';
     this.pathHome(d);
+    const t = this.nearestTruck(d.x, d.y);
     this.emit(
       'lowBattery',
-      `Drone ${d.id} low battery (${Math.round(d.battery * 100)}%) — ${s ? `releasing Sector ${s.name}, ` : ''}returning to base`,
+      `Drone ${d.id} at ${Math.round(d.battery * 100)}% battery — flying to Truck ${t.id} to recharge${s ? `, ${s.view.label} handed back` : ''}`,
       d.id,
       s?.id,
     );
@@ -514,6 +856,7 @@ export class Simulation implements ISimulation {
     if (d.taskId == null) return;
     this.sectors[d.taskId].view.assignedDrone = null;
     this.released.set(d.taskId, d.id);
+    this.releasedPriority.set(d.taskId, d.commitment);
     d.taskId = null;
   }
 
@@ -524,8 +867,8 @@ export class Simulation implements ISimulation {
     this.emit(
       'taskComplete',
       exhausted
-        ? `Drone ${d.id} closed Sector ${s.name} (${pct}% searched, rest unreachable)`
-        : `Drone ${d.id} completed Sector ${s.name} (${pct}% searched)`,
+        ? `Drone ${d.id} finished ${s.view.label} (${pct}% searched, rest unreachable)`
+        : `Drone ${d.id} finished ${s.view.label} (${pct}% searched)`,
       d.id,
       s.id,
     );
@@ -638,7 +981,12 @@ export class Simulation implements ISimulation {
         aggs.push(agg);
       }
     }
-    for (const id of this.released.keys()) if (!candidates.some((c) => c.id === id)) this.released.delete(id);
+    for (const id of this.released.keys()) {
+      if (!candidates.some((c) => c.id === id)) {
+        this.released.delete(id);
+        this.releasedPriority.delete(id);
+      }
+    }
 
     const allResolved = st.survivors.every((s) => s.found || s.lost);
     if (candidates.length === 0 || (allResolved && st.metrics.areaSearchedFrac >= 0.8)) {
@@ -663,7 +1011,10 @@ export class Simulation implements ISimulation {
     });
 
     const available = this.drones.filter(
-      (d) => d.active && !d.charging && (d.status === 'IDLE' || d.status === 'TRAVELLING' || d.status === 'SEARCHING'),
+      (d) =>
+        d.active &&
+        !d.charging &&
+        (d.status === 'IDLE' || d.status === 'TRAVELLING' || d.status === 'SEARCHING' || d.status === 'RETURNING'),
     );
     const allocDrones: AllocDrone[] = available.map((d) => ({
       id: d.id,
@@ -677,7 +1028,8 @@ export class Simulation implements ISimulation {
       id: s.id,
       cx: s.cx,
       cy: s.cy,
-      priority: priorities[i],
+      // An abandoned block keeps the priority it was assigned at, so someone finishes it.
+      priority: Math.max(priorities[i], this.releasedPriority.get(s.id) ?? 0),
       searchCost: aggs[i].unsearched / (1.4 * this.fixed.sensorRange),
       released: this.released.has(s.id),
     }));
@@ -685,8 +1037,7 @@ export class Simulation implements ISimulation {
       weights: cfg.weights,
       diag: Math.hypot(this.W, this.H),
       capacity: this.fixed.batteryCapacity,
-      baseX: this.baseX,
-      baseY: this.baseY,
+      homes: this.trucks,
       hysteresis: HYSTERESIS,
       releasedBonus: RELEASED_BONUS,
       spread: 25,
@@ -709,12 +1060,15 @@ export class Simulation implements ISimulation {
         distance.set(d.id, a.distance);
       }
       const to = a ? a.taskId : null;
-      if (to === d.taskId) continue;
+      if (to === d.taskId) {
+        if (to == null && d.status === 'RETURNING') continue;
+        if (to != null || d.dockedTruck !== null) continue;
+      }
       d.commitment = to != null ? priorities[candidates.indexOf(this.sectors[to])] : 0;
       const change: Change = { drone: d, from: d.taskId, to };
       d.taskId = to;
       if (to == null) {
-        if (this.atBase(d)) {
+        if (d.dockedTruck !== null) {
           d.status = 'IDLE';
           d.path = [];
         } else {
@@ -734,6 +1088,7 @@ export class Simulation implements ISimulation {
         const prevOwner = owner.get(to);
         if (rel !== undefined) {
           this.released.delete(to);
+          this.releasedPriority.delete(to);
           change.takeoverFrom = rel;
           st.metrics.tasksReassigned++;
         } else if (prevOwner !== undefined && prevOwner !== d.id) {
@@ -748,8 +1103,8 @@ export class Simulation implements ISimulation {
     if (reasons.length && (changes.length || announce)) {
       const what = changes.length
         ? `${changes.length} drone${changes.length === 1 ? '' : 's'} re-tasked`
-        : `${candidates.length} sectors re-scored, assignments unchanged`;
-      this.emit('replan', `Fleet replan (${reasons.join('; ')}): ${what}`);
+        : `${candidates.length} blocks re-scored, plan unchanged`;
+      this.emit('replan', `Replanned (${reasons.join('; ')}): ${what}`);
     }
     for (const c of changes) this.emitAssignment(c, terms, priorities, candidates, distance.get(c.drone.id) ?? 0);
   }
@@ -758,7 +1113,8 @@ export class Simulation implements ISimulation {
     const agg = emptyAgg();
     const { known, searched, frontier } = this.k;
     const hazard = this.k.view.hazard;
-    const { terrain, population } = this.world;
+    const terrain = this.world.terrain;
+    const population = this.pop;
     const info = this.state.config.info;
     const impacted = !!this.state.flood?.impacted;
     const flood = this.floodMask;
@@ -767,7 +1123,7 @@ export class Simulation implements ISimulation {
     for (let y = s.y0; y < s.y1; y++) {
       for (let x = s.x0; x < s.x1; x++) {
         const i = y * W + x;
-        if (known[i] && terrain[i] === WATER) continue;
+        if ((known[i] && terrain[i] === WATER) || this.hidden[i]) continue;
         agg.believed++;
         if (frontier[i]) agg.frontier = true;
         const sv = searched[i];
@@ -798,7 +1154,7 @@ export class Simulation implements ISimulation {
     for (let y = s.y0; y < s.y1; y++) {
       for (let x = s.x0; x < s.x1; x++) {
         const i = y * this.W + x;
-        if (known[i] && this.world.terrain[i] === WATER) continue;
+        if ((known[i] && this.world.terrain[i] === WATER) || this.hidden[i]) continue;
         believed++;
         if (searched[i] >= SEARCHED_THRESHOLD) done++;
       }
@@ -809,8 +1165,7 @@ export class Simulation implements ISimulation {
   private emitAssignment(c: Change, terms: Terms[], priorities: number[], candidates: Sector[], dist: number) {
     const d = c.drone;
     if (c.to == null) {
-      const from = c.from != null ? ` (left Sector ${this.sectors[c.from].name})` : '';
-      this.emit('reassign', `Drone ${d.id} has no worthwhile reachable sector${from} — returning to base`, d.id);
+      if (c.from != null) this.emit('reassign', `Drone ${d.id} has nothing worthwhile in range — landing on the nearest truck`, d.id);
       return;
     }
     const s = this.sectors[c.to];
@@ -831,9 +1186,9 @@ export class Simulation implements ISimulation {
       .map(([name, , v]) => `${name} ${v.toFixed(2)}`);
     const km = ((dist * this.world.meta.cellSizeM) / 1000).toFixed(1);
     const why = `priority ${priorities[idx].toFixed(2)}: ${[...top, `${km} km`].join(', ')}`;
-    let msg = `Drone ${d.id} → Sector ${s.name} (${why})`;
+    let msg = `Drone ${d.id} → ${s.view.label} (${why})`;
     if (c.takeoverFrom !== undefined) msg += ` — taking over from Drone ${c.takeoverFrom}`;
-    else if (c.from != null) msg += ` — switching from Sector ${this.sectors[c.from].name}`;
+    else if (c.from != null) msg += ` — switching from ${this.sectors[c.from].view.label}`;
     this.emit(c.from == null && c.takeoverFrom === undefined ? 'assign' : 'reassign', msg, d.id, s.id);
   }
 
@@ -842,13 +1197,19 @@ export class Simulation implements ISimulation {
     if (st.metrics.complete) return;
     this.updateMetrics();
     st.metrics.complete = true;
-    st.running = false;
     for (const d of this.drones) {
       if (!d.active) continue;
       if (d.taskId != null) this.sectors[d.taskId].view.assignedDrone = null;
       d.taskId = null;
       d.path = [];
-      if (d.status !== 'DISABLED') d.status = 'IDLE';
+      if (d.airborne) {
+        d.status = 'RETURNING';
+        this.pathHome(d);
+      } else if (d.status !== 'DISABLED' && !d.charging) d.status = 'IDLE';
+    }
+    for (const t of this.trucks) {
+      t.path = [];
+      t.status = 'PARKED';
     }
     const m = st.metrics;
     const mins = Math.floor(st.time / 60);

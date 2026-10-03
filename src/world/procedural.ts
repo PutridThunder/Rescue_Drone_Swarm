@@ -130,6 +130,8 @@ export function generateProceduralWorld(seed = 1, width = 160, height = 120): Wo
     buildingHeight,
     population,
     coastDistance: new Float32Array(n),
+    roadName: new Int16Array(n).fill(-1),
+    roadNames: [],
     base,
   };
   computeCoastDistance(world);

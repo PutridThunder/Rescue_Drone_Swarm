@@ -1,246 +1,197 @@
 import * as THREE from 'three';
 import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
-import type { KnowledgeView, SimState, World } from '../types';
-import { DroneLayer } from './droneLayer';
-import { FloodLayer, FrontierLayer, SurvivorLayer, TaskLayer } from './markerLayers';
-import { TerrainLayer, type OverlayFlags } from './terrainLayer';
+import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import type { MapJSON, SimState, World } from '../types';
+import { ActorLayer } from './actors';
+import { CityLayer } from './cityLayer';
+import { SCENE } from './palette';
 
-export type OverlayName = 'fog' | 'frontier' | 'hazard' | 'population' | 'paths' | 'tasks' | 'sensors' | 'groundTruth';
-
-const DEFAULT_OVERLAYS: Record<OverlayName, boolean> = {
-  fog: true,
-  frontier: true,
-  hazard: true,
-  population: false,
-  paths: true,
-  tasks: true,
-  sensors: true,
-  groundTruth: false,
-};
+export interface RenderOptions {
+  showPaths: boolean;
+  showSensors: boolean;
+  showLabels: boolean;
+  revealHidden: boolean;
+}
 
 export class Renderer {
   private readonly renderer: THREE.WebGLRenderer;
+  private readonly labelRenderer: CSS2DRenderer;
   private readonly scene = new THREE.Scene();
-  private readonly camera: THREE.OrthographicCamera;
+  private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: MapControls;
-  private readonly terrain: TerrainLayer;
-  private readonly frontier: FrontierLayer;
-  private readonly drones: DroneLayer;
-  private readonly tasks: TaskLayer;
-  private readonly survivors: SurvivorLayer;
-  private readonly flood: FloodLayer;
-  private readonly origin: THREE.Vector2;
-  private readonly resolution = new THREE.Vector2(1, 1);
-  private readonly overlays = { ...DEFAULT_OVERLAYS };
-  private readonly viewSize: number;
-  private readonly clock = new THREE.Clock();
+  private readonly city: CityLayer;
+  private readonly actors: ActorLayer;
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly sun: THREE.DirectionalLight;
+  private readonly offset: THREE.Vector3;
   private readonly resizeObserver: ResizeObserver;
-  private lastKnowledge: KnowledgeView | null = null;
-  private needsFullRecolor = true;
-  private elapsed = 0;
+  private follow: number | null = null;
+  private readonly followPos = new THREE.Vector3();
+  private clock = 0;
+  private lastTime = performance.now();
+  private labelsWanted = true;
 
-  constructor(private readonly container: HTMLElement, private readonly world: World) {
-    const { width, height } = world.meta;
-    this.origin = new THREE.Vector2(width / 2, height / 2);
-
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+  constructor(
+    private readonly container: HTMLElement,
+    private readonly world: World,
+    map: MapJSON | null,
+  ) {
+    const { width: W, height: H } = world.meta;
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.setClearColor(0x000000, 0);
-    const canvas = this.renderer.domElement;
-    canvas.classList.add('sar-canvas');
-    canvas.style.display = 'block';
-    canvas.style.width = '100%';
-    canvas.style.height = '100%';
-    canvas.style.background = 'radial-gradient(ellipse at 50% 35%, #2b3a67 0%, #161d38 55%, #0b0f20 100%)';
-    container.appendChild(canvas);
+    container.appendChild(this.renderer.domElement);
 
-    // Camera: orthographic 3/4 view from the south-southeast (sea in front, mountains behind).
-    this.viewSize = Math.max(width, height) * 0.62;
-    this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -2000, 4000);
-    const dist = 500;
-    this.camera.position.set(dist * 0.35, dist * 0.78, dist * 0.75);
-    this.camera.zoom = 0.72;
-    this.controls = new MapControls(this.camera, canvas);
-    this.controls.target.set(0, 0, 6);
+    this.labelRenderer = new CSS2DRenderer();
+    this.labelRenderer.domElement.className = 'label-layer';
+    container.appendChild(this.labelRenderer.domElement);
+
+    this.scene.background = new THREE.Color(SCENE.background);
+    this.scene.fog = new THREE.Fog(SCENE.background, 260, 520);
+
+    this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 2000);
+    this.camera.position.set(-20, 95, 115);
+
+    this.controls = new MapControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.12;
+    this.controls.maxPolarAngle = Math.PI * 0.44;
+    this.controls.minDistance = 8;
+    this.controls.maxDistance = 420;
     this.controls.screenSpacePanning = false;
-    this.controls.minZoom = 0.6;
-    this.controls.maxZoom = 12;
-    this.controls.minPolarAngle = 0.15;
-    this.controls.maxPolarAngle = 1.25;
-    this.controls.zoomToCursor = true;
-    this.controls.update();
+    this.controls.target.set(-15, 0, 35);
 
-    // Lighting
-    this.scene.add(new THREE.HemisphereLight(0xe4ecff, 0x40385a, 1.6));
-    const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
-    sun.position.set(-90, 160, 70);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera;
-    const half = Math.max(width, height) * 0.62;
-    sc.left = -half; sc.right = half; sc.top = half; sc.bottom = -half;
-    sc.near = 1; sc.far = 600;
-    sun.shadow.bias = -0.0008;
-    sun.shadow.normalBias = 0.04;
-    this.scene.add(sun, sun.target);
+    this.scene.add(new THREE.HemisphereLight(0xffffff, 0xd8dde6, 1.6));
+    this.sun = new THREE.DirectionalLight(0xffffff, 1.6);
+    this.sun.position.set(-120, 180, 80);
+    this.sun.castShadow = true;
+    this.sun.shadow.mapSize.set(4096, 4096);
+    const sc = this.sun.shadow.camera;
+    sc.left = -W / 2 - 10;
+    sc.right = W / 2 + 10;
+    sc.top = H / 2 + 10;
+    sc.bottom = -H / 2 - 10;
+    sc.near = 10;
+    sc.far = 500;
+    this.sun.shadow.bias = -0.0004;
+    this.sun.shadow.normalBias = 0.03;
+    this.scene.add(this.sun, this.sun.target);
 
-    this.terrain = new TerrainLayer(world);
-    this.scene.add(this.terrain.mesh);
-    this.addOceanAndBase();
-
-    this.frontier = new FrontierLayer(world, this.terrain.columnTop);
-    this.flood = new FloodLayer(world, this.terrain.groundTop, this.terrain.vScale);
-    this.tasks = new TaskLayer(this.origin, this.resolution);
-    this.survivors = new SurvivorLayer(this.origin);
-    this.drones = new DroneLayer(this.origin, this.resolution);
-    this.scene.add(this.frontier.mesh, this.flood.root, this.tasks.root, this.survivors.root, this.drones.root);
-    this.applyOverlayVisibility();
+    this.city = new CityLayer(world, map);
+    this.scene.add(this.city.group);
+    this.offset = this.city.group.position.clone();
+    this.actors = new ActorLayer(this.city, this.offset);
+    this.scene.add(this.actors.group);
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);
     this.resize();
   }
 
-  /** Column top (world units) at fractional sim coordinates. */
-  private heightAt = (x: number, y: number): number => {
-    const { width, height } = this.world.meta;
-    const cx = Math.min(width - 1, Math.max(0, Math.floor(x)));
-    const cy = Math.min(height - 1, Math.max(0, Math.floor(y)));
-    return this.terrain.columnTop[cy * width + cx];
-  };
+  update(state: SimState, dirtyCells: number[], floodMask: Uint8Array | null) {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - this.lastTime) / 1000);
+    this.lastTime = now;
+    this.clock += dt;
+    this.city.setFloodMask(floodMask);
+    this.city.update(state, dirtyCells, dt);
+    this.actors.update(state, this.clock, dt);
 
-  private addOceanAndBase(): void {
-    const { width, height } = this.world.meta;
-    // Slab under the whole diorama so the edges read as a solid block.
-    const slab = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 2, 1.2, height + 2),
-      new THREE.MeshLambertMaterial({ color: 0x232a4a }),
-    );
-    slab.position.y = -3.6;
-    slab.receiveShadow = true;
-    this.scene.add(slab);
-
-    // Stylized flat water sheet over the water cells.
-    const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(width, height).rotateX(-Math.PI / 2),
-      new THREE.MeshLambertMaterial({ color: 0x5bb8f0, transparent: true, opacity: 0.35, depthWrite: false }),
-    );
-    water.position.y = 0.12;
-    water.receiveShadow = true;
-    this.scene.add(water);
-
-    // Helipad at the base.
-    const { x, y } = this.world.base;
-    const top = this.heightAt(x + 0.5, y + 0.5);
-    const pad = new THREE.Group();
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 0.3, 24), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.25, 0.12, 6, 32).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff8a1f }));
-    ring.position.y = 0.17;
-    const hMat = new THREE.MeshBasicMaterial({ color: 0xff8a1f });
-    const bar = (w: number, d: number, px: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.06, d), hMat);
-      m.position.set(px, 0.17, 0);
-      return m;
-    };
-    pad.add(disc, ring, bar(0.18, 1.1, -0.35), bar(0.18, 1.1, 0.35), bar(0.7, 0.16, 0));
-    disc.castShadow = true;
-    disc.receiveShadow = true;
-    pad.position.set(x + 0.5 - width / 2, top + 0.15, y + 0.5 - height / 2);
-    this.scene.add(pad);
-  }
-
-  private flags(): OverlayFlags {
-    const o = this.overlays;
-    return { fog: o.fog, frontier: o.frontier, hazard: o.hazard, population: o.population };
-  }
-
-  /** `dtOverride` (seconds) is for deterministic/offscreen stepping; normally omitted. */
-  update(state: SimState, dirtyCells: number[], dtOverride?: number): void {
-    const real = this.clock.getDelta();
-    const dt = Math.min(0.1, dtOverride ?? real);
-    this.elapsed += dt;
-    const t = this.elapsed;
-    const k = state.knowledge;
-
-    if (k !== this.lastKnowledge) {
-      this.lastKnowledge = k;
-      this.needsFullRecolor = true;
+    if (this.follow !== null && this.actors.dronePosition(this.follow, this.followPos)) {
+      const delta = this.followPos.clone().sub(this.controls.target);
+      delta.y = 0;
+      const step = delta.multiplyScalar(Math.min(1, dt * 4));
+      this.controls.target.add(step);
+      this.camera.position.add(step);
     }
-    if (this.needsFullRecolor) {
-      this.terrain.recolor(k, this.flags(), null);
-      this.frontier.rebuild(k.frontier);
-      this.needsFullRecolor = false;
-    } else if (dirtyCells.length) {
-      this.terrain.recolor(k, this.flags(), dirtyCells);
-      this.frontier.rebuild(k.frontier);
-    }
-    this.frontier.animate(t);
-
-    this.drones.update(state.drones, this.heightAt, t, dt);
-    this.tasks.update(state.tasks, this.heightAt, t);
-    this.survivors.update(state.survivors, this.heightAt, t);
-    this.flood.update(state.flood, t);
-  }
-
-  render(): void {
     this.controls.update();
+    // Street names only when zoomed in enough to read them.
+    const dist = this.camera.position.distanceTo(this.controls.target);
+    this.city.setLabelsVisible(this.labelsWanted && dist < 150);
+  }
+
+  render() {
     this.renderer.render(this.scene, this.camera);
+    this.labelRenderer.render(this.scene, this.camera);
   }
 
-  setOverlay(name: OverlayName, on: boolean): void {
-    if (this.overlays[name] === on) return;
-    this.overlays[name] = on;
-    if (name === 'fog' || name === 'frontier' || name === 'hazard' || name === 'population') this.needsFullRecolor = true;
-    this.applyOverlayVisibility();
+  setOptions(o: Partial<RenderOptions>) {
+    if (o.showPaths !== undefined) this.actors.showPaths = o.showPaths;
+    if (o.showSensors !== undefined) this.actors.showSensors = o.showSensors;
+    if (o.revealHidden !== undefined) this.actors.revealHidden = o.revealHidden;
+    if (o.showLabels !== undefined) this.labelsWanted = o.showLabels;
   }
 
-  getOverlays(): Readonly<Record<OverlayName, boolean>> {
-    return this.overlays;
+  /** Follow a drone with the camera (null to stop). Zooms in when starting to follow. */
+  setFollow(id: number | null) {
+    this.follow = id;
+    if (id !== null && this.actors.dronePosition(id, this.followPos)) {
+      const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+      const dist = Math.min(this.camera.position.distanceTo(this.controls.target), 45);
+      this.controls.target.copy(this.followPos).setY(0);
+      this.camera.position.copy(this.controls.target).addScaledVector(dir, dist);
+    }
   }
 
-  private applyOverlayVisibility(): void {
-    this.frontier.mesh.visible = this.overlays.frontier;
-    this.tasks.root.visible = this.overlays.tasks;
-    this.drones.showSensors = this.overlays.sensors;
-    this.drones.showPaths = this.overlays.paths;
-    this.survivors.showGroundTruth = this.overlays.groundTruth;
+  get following(): number | null {
+    return this.follow;
   }
 
-  resize(): void {
-    const w = Math.max(1, this.container.clientWidth);
-    const h = Math.max(1, this.container.clientHeight);
-    this.renderer.setSize(w, h, false);
-    const aspect = w / h;
-    const vs = this.viewSize;
-    this.camera.left = (-vs * aspect) / 2;
-    this.camera.right = (vs * aspect) / 2;
-    this.camera.top = vs / 2;
-    this.camera.bottom = -vs / 2;
+  /** Grid coordinates (cells) under a screen point, or null. */
+  pick(clientX: number, clientY: number): { x: number; y: number } | null {
+    this.setRay(clientX, clientY);
+    const hit = this.raycaster.intersectObjects(this.city.pickables, false)[0];
+    if (!hit) return null;
+    const x = hit.point.x - this.offset.x;
+    const y = hit.point.z - this.offset.z;
+    if (x < 0 || y < 0 || x >= this.world.meta.width || y >= this.world.meta.height) return null;
+    return { x, y };
+  }
+
+  /** Drone whose on-screen position is within `radiusPx` of the point. */
+  pickDrone(clientX: number, clientY: number, radiusPx = 28): number | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    let best: number | null = null;
+    let bestD = radiusPx;
+    for (const { id, pos } of this.actors.dronesWorld()) {
+      const p = pos.project(this.camera);
+      if (p.z > 1) continue;
+      const sx = rect.left + ((p.x + 1) / 2) * rect.width;
+      const sy = rect.top + ((1 - p.y) / 2) * rect.height;
+      const d = Math.hypot(sx - clientX, sy - clientY);
+      if (d < bestD) {
+        bestD = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  get canvas(): HTMLCanvasElement {
+    return this.renderer.domElement;
+  }
+
+  resize() {
+    const w = this.container.clientWidth || window.innerWidth;
+    const h = this.container.clientHeight || window.innerHeight;
+    this.renderer.setSize(w, h);
+    this.labelRenderer.setSize(w, h);
+    this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.resolution.set(w, h);
   }
 
-  dispose(): void {
+  dispose() {
     this.resizeObserver.disconnect();
     this.controls.dispose();
-    this.terrain.dispose();
-    this.frontier.dispose();
-    this.drones.dispose();
-    this.tasks.dispose();
-    this.survivors.dispose();
-    this.flood.dispose();
-    this.scene.traverse((o) => {
-      if (o instanceof THREE.Mesh) {
-        o.geometry.dispose();
-        const m = o.material as THREE.Material | THREE.Material[];
-        (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
-      }
-    });
     this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.container.removeChild(this.renderer.domElement);
+    this.container.removeChild(this.labelRenderer.domElement);
+  }
+
+  private setRay(clientX: number, clientY: number) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
   }
 }

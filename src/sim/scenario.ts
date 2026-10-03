@@ -85,6 +85,7 @@ export function sampleSurvivors(
   count: number,
   rng: Rng,
   hazardTruth: Float32Array | null,
+  allowed?: Uint8Array, // cells a survivor may occupy (e.g. not deep inside high-rises)
 ): SurvivorView[] {
   const { width, height } = world.meta;
   const n = width * height;
@@ -102,9 +103,9 @@ export function sampleSurvivors(
   let acc = 0;
   for (let i = 0; i < n; i++) {
     const t = world.terrain[i];
-    if (t !== WATER) {
+    if (t !== WATER && (!allowed || allowed[i])) {
       let w = world.population[i] + meanPop * (t === PARK ? 0.25 : 0.04);
-      if (hazardTruth) w *= 1 + 3 * hazardTruth[i];
+      if (hazardTruth) w *= 1 + 12 * hazardTruth[i]; // tsunami scenario: busy waterfront (Shipyards, Quay)
       acc += w;
     }
     cum[i] = acc;
@@ -118,7 +119,8 @@ export function sampleSurvivors(
       for (let tries = 0; tries < 8 && cell < 0; tries++) {
         const x = Math.floor(anchor.x) + rng.int(5) - 2;
         const y = Math.floor(anchor.y) + rng.int(5) - 2;
-        if (x >= 0 && y >= 0 && x < width && y < height && world.terrain[y * width + x] !== WATER) cell = y * width + x;
+        const j = y * width + x;
+        if (x >= 0 && y >= 0 && x < width && y < height && world.terrain[j] !== WATER && (!allowed || allowed[j])) cell = j;
       }
     }
     if (cell < 0) cell = lowerBound(cum, rng.next() * acc);
@@ -132,6 +134,7 @@ export function sampleSurvivors(
       foundBy: null,
       foundAt: null,
       lost: false,
+      placed: false,
     });
   }
   return out;

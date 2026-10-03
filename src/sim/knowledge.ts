@@ -5,6 +5,10 @@ export interface SensorDisc {
   dx: Int16Array;
   dy: Int16Array;
   gain: Float32Array;
+  /** Line-of-sight ray per offset: intermediate cells rayX/rayY[rayStart[j] .. rayStart[j + 1]). */
+  rayStart: Int32Array;
+  rayX: Int16Array;
+  rayY: Int16Array;
 }
 
 /** Gain falls off from ~0.3 at the centre to ~0.07 at the edge; repeated observations accumulate. */
@@ -24,7 +28,33 @@ export function buildSensorDisc(range: number): SensorDisc {
       gain.push(0.3 * (1 - 0.75 * f * f));
     }
   }
-  return { dx: Int16Array.from(dx), dy: Int16Array.from(dy), gain: Float32Array.from(gain) };
+  const rayStart = [0];
+  const rayX: number[] = [];
+  const rayY: number[] = [];
+  for (let j = 0; j < dx.length; j++) {
+    // Cells strictly between the sensor and the target, sampled along the segment between cell centres.
+    const steps = Math.ceil(Math.hypot(dx[j], dy[j]) * 2);
+    let lx = 0;
+    let ly = 0;
+    for (let s = 1; s < steps; s++) {
+      const x = Math.round((dx[j] * s) / steps);
+      const y = Math.round((dy[j] * s) / steps);
+      if ((x === lx && y === ly) || (x === dx[j] && y === dy[j])) continue;
+      rayX.push(x);
+      rayY.push(y);
+      lx = x;
+      ly = y;
+    }
+    rayStart.push(rayX.length);
+  }
+  return {
+    dx: Int16Array.from(dx),
+    dy: Int16Array.from(dy),
+    gain: Float32Array.from(gain),
+    rayStart: Int32Array.from(rayStart),
+    rayX: Int16Array.from(rayX),
+    rayY: Int16Array.from(rayY),
+  };
 }
 
 /** Fleet-wide shared map plus dirty-cell tracking for the renderer. */

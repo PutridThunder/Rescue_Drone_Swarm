@@ -8,8 +8,7 @@ const params = (over: Partial<AllocParams> = {}): AllocParams => ({
   weights: DEFAULT_WEIGHTS,
   diag: 200,
   capacity: 500,
-  baseX: 0,
-  baseY: 0,
+  homes: [{ x: 0, y: 0 }],
   hysteresis: 0.15,
   releasedBonus: 0.1,
   spread: 25,
@@ -70,7 +69,7 @@ describe('allocation', () => {
     expect(new Set(ids).size).toBe(5);
     const events = sim.drainEvents();
     expect(events.filter((e) => e.type === 'assign')).toHaveLength(5);
-    expect(events.find((e) => e.type === 'assign')!.message).toMatch(/Drone \d → Sector [A-Z]+\d+ \(priority \d\.\d\d: .* km\)/);
+    expect(events.find((e) => e.type === 'assign')!.message).toMatch(/Drone \d → .+ \(priority \d\.\d\d: .* km\)/);
     for (const d of sim.state.drones) expect(sim.state.tasks.find((t) => t.id === d.taskId)!.assignedDrone).toBe(d.id);
   });
 });

@@ -1,4 +1,5 @@
-// Builds public/world.json for the City of North Vancouver from OSM (Overpass) + AWS Terrarium DEM tiles.
+// Builds public/world.json (10 m simulation grid) and public/map.json (vector footprints/roads for rendering)
+// for Lower & Central Lonsdale, North Vancouver, from OSM (Overpass) + AWS Terrarium DEM tiles.
 // Usage: npm run data   (raw responses are cached in scripts/.cache)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,11 +10,12 @@ import { PNG } from 'pngjs';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.join(here, '.cache');
 const OUT = path.join(here, '..', 'public', 'world.json');
+const OUT_MAP = path.join(here, '..', 'public', 'map.json');
 fs.mkdirSync(CACHE, { recursive: true });
 fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
-const [S, W, N, E] = [49.3, -123.115, 49.345, -123.025];
-const CELL = 30;
+const [S, W, N, E] = [49.308, -123.095, 49.327, -123.06];
+const CELL = 10;
 const LAT0 = ((S + N) / 2) * (Math.PI / 180);
 const M_PER_DEG_LAT = 111132.954 - 559.822 * Math.cos(2 * LAT0) + 1.175 * Math.cos(4 * LAT0);
 const M_PER_DEG_LON = 111412.84 * Math.cos(LAT0) - 93.5 * Math.cos(3 * LAT0);
@@ -85,6 +87,7 @@ async function tile(z, x, y) {
 
 const toX = (lon) => ((lon - W) / (E - W)) * WIDTH;
 const toY = (lat) => ((N - lat) / (N - S)) * HEIGHT;
+const r2 = (v) => Math.round(v * 100) / 100;
 
 /** Collect polygon edges (in grid coords scaled by `sub`) from a way or multipolygon relation. */
 function polygonEdges(el, sub = 1) {
@@ -148,11 +151,16 @@ function rasterLine(geom, halfWidth, fn) {
   for (let i = 0; i + 1 < geom.length; i++) {
     const ax = toX(geom[i].lon), ay = toY(geom[i].lat);
     const bx = toX(geom[i + 1].lon), by = toY(geom[i + 1].lat);
-    const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) * 2));
+    const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) * 8));
     for (let s = 0; s <= steps; s++) {
       const px = ax + ((bx - ax) * s) / steps;
       const py = ay + ((by - ay) * s) / steps;
       const r = Math.ceil(halfWidth);
+      if (r === 0) {
+        const x = Math.floor(px), y = Math.floor(py);
+        if (x >= 0 && y >= 0 && x < WIDTH && y < HEIGHT) fn(x, y);
+        continue;
+      }
       for (let dy = -r; dy <= r; dy++)
         for (let dx = -r; dx <= r; dx++) {
           if (dx * dx + dy * dy > halfWidth * halfWidth + 0.01) continue;
@@ -188,7 +196,7 @@ async function main() {
   );
 
   console.log('Fetching elevation tiles...');
-  const Z = 14;
+  const Z = 15;
   const n = 2 ** Z;
   const lonToTX = (lon) => ((lon + 180) / 360) * n;
   const latToTY = (lat) => {
@@ -279,16 +287,34 @@ async function main() {
       });
   }
 
-  // Roads (wider for major roads)
-  const MAJOR = /^(motorway|trunk|primary)$/;
+  // Roads: dense-sampled lines (4-connected, ~10 m) for minor streets, wider for major roads. Track street names.
+  const MAJOR = /^(motorway|trunk|primary|secondary)$/;
+  const roadNames = [];
+  const nameIndex = new Map();
+  const roadName = new Int16Array(NCELLS).fill(-1);
+  const roadRank = new Uint8Array(NCELLS);
+  const vecRoads = [];
   for (const el of roads.elements) {
     if (!el.geometry) continue;
     if (el.tags?.bridge && el.tags?.layer && Number(el.tags.layer) > 1) continue;
-    rasterLine(el.geometry, MAJOR.test(el.tags?.highway) ? 1 : 0.5, (x, y) => (terrain[y * WIDTH + x] = T.Road));
+    const major = MAJOR.test(el.tags?.highway);
+    const nm = el.tags?.name;
+    let ni = -1;
+    if (nm) {
+      if (!nameIndex.has(nm)) { nameIndex.set(nm, roadNames.length); roadNames.push(nm); }
+      ni = nameIndex.get(nm);
+    }
+    const rank = major ? 2 : 1;
+    rasterLine(el.geometry, major ? 1 : 0, (x, y) => {
+      const i = y * WIDTH + x;
+      terrain[i] = T.Road;
+      if (ni >= 0 && rank >= roadRank[i]) { roadName[i] = ni; roadRank[i] = rank; }
+    });
+    vecRoads.push({ p: el.geometry.flatMap((g) => [r2(toX(g.lon)), r2(toY(g.lat))]), w: major ? 16 : 10, n: ni });
   }
 
   // Buildings: supersample 3x3 per cell (10 m subcells) for coverage, height and floor area.
-  const SUB = 3;
+  const SUB = 2;
   const subArea = (CELL / SUB) ** 2;
   const coverage = new Float32Array(NCELLS);
   const bHeight = new Float32Array(NCELLS);
@@ -297,6 +323,7 @@ async function main() {
   const NONRES = new Set(['commercial', 'industrial', 'retail', 'office', 'warehouse', 'garage', 'garages', 'shed', 'school', 'church', 'hospital', 'roof', 'service', 'parking', 'university', 'public', 'civic', 'hotel', 'construction', 'carport', 'kiosk', 'train_station', 'transportation']);
   const DEFAULT_H = { house: 7, detached: 7, bungalow: 5, semidetached_house: 7, duplex: 7, terrace: 8, residential: 10, apartments: 15, commercial: 10, retail: 7, office: 18, industrial: 9, warehouse: 9, garage: 3, garages: 3, shed: 3, school: 9, church: 12, hospital: 18, hotel: 25, roof: 4, yes: 7 };
   let buildingCount = 0;
+  const vecBuildings = [];
   for (const el of buildings.elements) {
     const tags = el.tags || {};
     const type = tags.building;
@@ -307,6 +334,8 @@ async function main() {
     const footprint = ringAreaM2(el);
     const countsForPop = footprint >= 45; // skip sheds / garages
     buildingCount++;
+    const outer = el.type === 'way' ? el.geometry : el.members?.find((m) => m.role === 'outer')?.geometry;
+    if (outer && outer.length >= 3) vecBuildings.push({ p: outer.flatMap((g) => [r2(toX(g.lon)), r2(toY(g.lat))]), h: Math.round(h * 10) / 10 });
     scanFill(polygonEdges(el, SUB), WIDTH * SUB, HEIGHT * SUB, (sx, sy) => {
       const i = Math.floor(sy / SUB) * WIDTH + Math.floor(sx / SUB);
       coverage[i] += 1 / (SUB * SUB);
@@ -317,7 +346,7 @@ async function main() {
   }
   const buildingHeight = new Float32Array(NCELLS);
   for (let i = 0; i < NCELLS; i++) {
-    if (coverage[i] >= (terrain[i] === T.Road ? 0.35 : 0.2)) {
+    if (coverage[i] >= (terrain[i] === T.Road ? 0.75 : 0.5)) {
       terrain[i] = T.Building;
       buildingHeight[i] = bHeight[i];
     }
@@ -331,7 +360,7 @@ async function main() {
   const population = new Float32Array(NCELLS);
   for (let i = 0; i < NCELLS; i++) {
     population[i] = resFloor[i] / 60; // ~60 m2 gross floor area per resident (calibrated vs census density)
-    if (terrain[i] === T.Park) population[i] += 0.03;
+    if (terrain[i] === T.Park) population[i] += 0.003;
   }
 
   // Base: nearest Ground/Park cell to Waterfront Park by Lonsdale Quay
@@ -347,14 +376,18 @@ async function main() {
 
   const round = (a, p) => Array.from(a, (v) => Math.round(v * p) / p);
   const json = {
-    meta: { name: 'City of North Vancouver, BC', bbox: [S, W, N, E], cellSizeM: CELL, width: WIDTH, height: HEIGHT, source: 'osm' },
+    meta: { name: 'Lonsdale, North Vancouver, BC', bbox: [S, W, N, E], cellSizeM: CELL, width: WIDTH, height: HEIGHT, source: 'osm' },
     terrain: Array.from(terrain),
     elevation: round(elevation, 10),
     buildingHeight: round(buildingHeight, 10),
     population: round(population, 100),
     base,
+    roadName: Array.from(roadName),
+    roadNames,
   };
   fs.writeFileSync(OUT, JSON.stringify(json));
+  fs.writeFileSync(OUT_MAP, JSON.stringify({ buildings: vecBuildings, roads: vecRoads, roadNames }));
+  console.log(`Wrote ${OUT_MAP} (${(fs.statSync(OUT_MAP).size / 1e6).toFixed(2)} MB), ${vecBuildings.length} footprints, ${vecRoads.length} roads`);
 
   // Summary
   const names = ['Water', 'Ground', 'Road', 'Park', 'Building'];

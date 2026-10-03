@@ -1,402 +1,462 @@
-import type { DroneStatus, DroneView, FloodState, InfoModes, Metrics, SimConfig, SimEvent, SimEventType, Weights } from '../types';
-import { droneColorHex } from './palette';
-import type { OverlayName } from './Renderer';
+import type { DroneView, InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState, Weights } from '../types';
+import { droneColorCss } from './palette';
+import type { RenderOptions } from './Renderer';
 import './style.css';
+
+export type Tool = 'move' | 'survivor' | 'crowd' | 'erase' | 'fail';
 
 export interface UICallbacks {
   onStartPause(): void;
-  onReset(config: SimConfig): void;
-  onDisableDrone(): void;
-  onConfigChange(partial: Partial<SimConfig>): void;
-  onSpeedChange(multiplier: number): void;
-  onOverlayChange(name: OverlayName, on: boolean): void;
+  onReset(): void;
+  onSpeed(multiplier: number): void;
+  onScenario(s: Scenario): void;
+  onInfo(info: Partial<InfoModes>): void;
+  onSetup(partial: Partial<SimConfig>): void; // restarts the mission
+  onWeights(w: Partial<Weights>): void;
+  onTool(t: Tool): void;
+  onFollow(id: number | null): void;
+  onView(o: Partial<RenderOptions>): void;
 }
 
-type Props = Record<string, string | number | boolean | ((e: Event) => void) | undefined>;
-
-function el<K extends keyof HTMLElementTagNameMap>(tag: K, props: Props = {}, ...children: (Node | string | null)[]): HTMLElementTagNameMap[K] {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v === undefined) continue;
-    if (k === 'class') e.className = String(v);
-    else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v as EventListener);
-    else if (k in e && typeof v !== 'string') (e as unknown as Record<string, unknown>)[k] = v;
-    else e.setAttribute(k, String(v));
-  }
-  for (const c of children) if (c !== null) e.append(c);
-  return e;
+export interface PlaceInfo {
+  street: string | null;
+  lat: number;
+  lon: number;
+  clientX: number;
+  clientY: number;
 }
 
-function setText(node: HTMLElement, text: string): void {
-  if (node.textContent !== text) node.textContent = text;
-}
-
-function fmtTime(s: number): string {
-  const sign = s < 0 ? '-' : '';
-  s = Math.abs(s);
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${sign}${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-}
-
-const pct = (f: number, digits = 0) => `${(Math.max(0, f) * 100).toFixed(digits)}%`;
-
-const EVENT_STYLE: Record<SimEventType, { icon: string; cls: string }> = {
-  assign: { icon: '➜', cls: 'ev-assign' },
-  reassign: { icon: '⇄', cls: 'ev-reassign' },
-  replan: { icon: '↻', cls: 'ev-replan' },
-  survivor: { icon: '★', cls: 'ev-survivor' },
-  failure: { icon: '✖', cls: 'ev-failure' },
-  lowBattery: { icon: '▼', cls: 'ev-low' },
-  recharged: { icon: '▲', cls: 'ev-recharged' },
-  taskComplete: { icon: '✓', cls: 'ev-done' },
-  impact: { icon: '≈', cls: 'ev-impact' },
-  complete: { icon: '◆', cls: 'ev-complete' },
+const ICON = {
+  play: '<path d="M7 4.5v15l12-7.5z"/>',
+  pause: '<path d="M7 4h4v16H7zM13 4h4v16h-4z"/>',
+  reset: '<path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
+  survivor: '<circle cx="12" cy="6" r="3"/><path d="M7 21v-6l-2-1 2-5h10l2 5-2 1v6h-3v-5h-4v5z"/>',
+  crowd: '<circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="7" r="2.5"/><path d="M3 19v-4l1.5-4h7L13 15v4zM11 19v-4l1.5-4h7L21 15v4z"/>',
+  erase: '<path d="M5 15l8-8 6 6-6 6H8zM10 19h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>',
+  fail: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
+  map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',
+  street: '<path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
 };
+const svg = (name: keyof typeof ICON, size = 18) =>
+  `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true">${ICON[name]}</svg>`;
 
-const STATUS_LABEL: Record<DroneStatus, string> = {
-  IDLE: 'Idle',
-  TRAVELLING: 'Transit',
-  SEARCHING: 'Search',
-  RETURNING: 'Return',
-  LOW_BATTERY: 'Low batt',
+const TOOLS: { id: Tool; label: string; icon: keyof typeof ICON; hint: string }[] = [
+  { id: 'move', label: 'Explore', icon: 'move', hint: 'Drag to pan, scroll to zoom. Click a street to see it on Google Maps, or click a drone to follow it.' },
+  { id: 'survivor', label: 'Survivor', icon: 'survivor', hint: 'Click to hide a survivor. The drones don’t know where they are and have to find them.' },
+  { id: 'crowd', label: 'Crowd', icon: 'crowd', hint: 'Click to report a crowd. With Population intel on, drones prioritise it; a few people are really there.' },
+  { id: 'erase', label: 'Erase', icon: 'erase', hint: 'Click near a survivor or crowd you placed to remove it.' },
+  { id: 'fail', label: 'Fail drone', icon: 'fail', hint: 'Click a flying drone to knock it out. Watch the fleet take over its block.' },
+];
+
+const STATUS_TEXT: Record<DroneView['status'], string> = {
+  IDLE: 'Ready',
+  TRAVELLING: 'Flying to',
+  SEARCHING: 'Searching',
+  RETURNING: 'Returning to truck',
+  LOW_BATTERY: 'Low battery → truck',
+  CHARGING: 'Charging',
   DISABLED: 'Down',
 };
 
-const WEIGHT_LABELS: [keyof Weights, string, string][] = [
-  ['population', 'Population', 'Favour areas where people likely are'],
-  ['hazard', 'Hazard', 'Favour areas at risk (flood zone)'],
-  ['urgency', 'Urgency', 'Favour areas that will flood soonest'],
-  ['information', 'Information', 'Favour unexplored territory'],
-  ['distance', 'Distance', 'Penalise far-away tasks'],
-  ['battery', 'Battery', 'Penalise tasks that strain battery'],
-  ['redundancy', 'Redundancy', 'Penalise re-searching covered ground'],
-];
-
-const INFO_LABELS: [keyof InfoModes, string][] = [
-  ['geography', 'Geography'],
-  ['population', 'Population'],
-  ['elevation', 'Elevation'],
-  ['disaster', 'Disaster'],
-];
-
-const OVERLAY_LABELS: [OverlayName, string, boolean][] = [
-  ['fog', 'Fog of war', true],
-  ['frontier', 'Frontier', true],
-  ['hazard', 'Hazard', true],
-  ['population', 'Population', false],
-  ['paths', 'Paths', true],
-  ['tasks', 'Tasks', true],
-  ['sensors', 'Sensors', true],
-  ['groundTruth', 'Ground truth', false],
-];
-
-interface DroneRow {
-  row: HTMLElement;
-  status: HTMLElement;
-  bar: HTMLElement;
-  battTxt: HTMLElement;
-  task: HTMLElement;
-}
+const FEED_TYPES = new Set(['assign', 'reassign', 'survivor', 'failure', 'lowBattery', 'truck', 'impact', 'complete', 'placed']);
 
 export class UI {
+  private readonly el: HTMLElement;
+  private readonly q = <T extends HTMLElement>(sel: string) => this.el.querySelector(sel) as T;
   private config: SimConfig;
-  private readonly startBtn: HTMLButtonElement;
-  private readonly pendingNote: HTMLElement;
-  private readonly metricEls: Record<string, HTMLElement> = {};
-  private readonly areaBar: HTMLElement;
-  private readonly banner: HTMLElement;
-  private readonly roster: HTMLElement;
-  private readonly droneRows = new Map<number, DroneRow>();
-  private readonly logList: HTMLElement;
-  private readonly results: HTMLElement;
-  private pendingReset = false;
+  private tool: Tool = 'move';
+  private follow: number | null = null;
+  private fleetKey = '';
 
-  constructor(private readonly root: HTMLElement, initial: SimConfig, private readonly cb: UICallbacks) {
+  constructor(
+    root: HTMLElement,
+    initial: SimConfig,
+    private readonly cb: UICallbacks,
+  ) {
     this.config = structuredClone(initial);
-    root.classList.add('sar-ui');
-
-    // ---------------- Left panel: mission control ----------------
-    this.startBtn = el('button', { class: 'btn btn-primary btn-big', onclick: () => cb.onStartPause() }, '▶  Start');
-    this.pendingNote = el('div', { class: 'pending hidden' }, 'Setup changed — press Reset to apply');
-    const controls = el('div', { class: 'btn-row' },
-      el('button', { class: 'btn', onclick: () => this.reset() }, '↺ Reset'),
-      el('button', { class: 'btn btn-danger', onclick: () => cb.onDisableDrone() }, '✖ Disable drone'),
-    );
-    const speed = this.segmented([1, 2, 5, 10], 1, (v) => cb.onSpeedChange(v));
-
-    const setup = el('div', { class: 'group' },
-      this.slider('Drones', 1, 12, 1, this.config.droneCount, (v) => String(v), (v) => this.setupChange({ droneCount: v })),
-      this.slider('Sensor range', 1, 12, 1, this.config.sensorRange, (v) => `${v} cells`, (v) => this.setupChange({ sensorRange: v })),
-      this.slider('Battery', 100, 3000, 50, this.config.batteryCapacity, (v) => `${v}`, (v) => this.setupChange({ batteryCapacity: v })),
-      this.select('Scenario', [['none', 'None'], ['tsunami', 'Earthquake + Tsunami']], this.config.scenario, (v) =>
-        this.setupChange({ scenario: v as SimConfig['scenario'] }),
-      ),
-      this.pendingNote,
-    );
-
-    const info = el('div', { class: 'chips' },
-      ...INFO_LABELS.map(([key, label]) =>
-        this.chip(label, this.config.info[key], (on) => {
-          this.config.info = { ...this.config.info, [key]: on };
-          cb.onConfigChange({ info: { ...this.config.info } });
-        }),
-      ),
-    );
-
-    const weights = el('div', { class: 'group' },
-      ...WEIGHT_LABELS.map(([key, label, hint]) =>
-        this.slider(label, 0, 3, 0.05, this.config.weights[key], (v) => v.toFixed(2), (v) => {
-          this.config.weights = { ...this.config.weights, [key]: v };
-          cb.onConfigChange({ weights: { ...this.config.weights } });
-        }, hint),
-      ),
-    );
-
-    const overlays = el('div', { class: 'chips' },
-      ...OVERLAY_LABELS.map(([name, label, on]) => this.chip(label, on, (v) => cb.onOverlayChange(name, v))),
-    );
-
-    const left = this.panel('left', 'Mission Control', [
-      el('div', { class: 'section' }, this.startBtn, controls, el('div', { class: 'label' }, 'Sim speed'), speed),
-      this.section('Fleet & scenario', setup),
-      this.section('Intel available', info),
-      this.section('Priority weights', weights, true),
-      this.section('Map overlays', overlays),
-    ]);
-
-    // ---------------- Right panel: metrics, roster, log ----------------
-    this.banner = el('div', { class: 'banner hidden' });
-    const big = (key: string, label: string, accent = '') => {
-      const v = el('div', { class: `big-val ${accent}` }, '–');
-      this.metricEls[key] = v;
-      return el('div', { class: 'big' }, v, el('div', { class: 'big-label' }, label));
-    };
-    const small = (key: string, label: string) => {
-      const v = el('span', { class: 'small-val' }, '–');
-      this.metricEls[key] = v;
-      return el('div', { class: 'small' }, el('span', { class: 'small-label' }, label), v);
-    };
-    this.areaBar = el('div', { class: 'bar-fill' });
-    const metrics = el('div', {},
-      el('div', { class: 'big-grid' },
-        big('area', 'Area searched', 'accent-cyan'),
-        big('survivors', 'Survivors found', 'accent-pink'),
-        big('time', 'Mission time'),
-        big('redundancy', 'Redundancy'),
-      ),
-      el('div', { class: 'bar' }, this.areaBar),
-      el('div', { class: 'small-grid' },
-        small('pop', 'Population reached'),
-        small('util', 'Fleet utilisation'),
-        small('tasks', 'Tasks done / reassigned'),
-        small('failures', 'Drone failures'),
-        small('lost', 'Survivors lost'),
-        small('dist', 'Distance flown'),
-      ),
-    );
-    this.roster = el('div', { class: 'roster' });
-    this.logList = el('div', { class: 'log' });
-
-    const right = this.panel('right', 'Live Telemetry', [
-      this.banner,
-      el('div', { class: 'section' }, metrics),
-      this.section('Fleet', this.roster),
-      this.section('Decision log', this.logList),
-    ]);
-
-    this.results = el('div', { class: 'results hidden' });
-    root.append(left, right, this.results);
+    this.el = document.createElement('div');
+    this.el.className = 'hud';
+    this.el.innerHTML = this.template();
+    root.appendChild(this.el);
+    this.bind();
+    this.syncSetup();
+    this.setTool('move');
   }
 
-  // ---------------------------------------------------------------- public API
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
 
-  setRunning(running: boolean): void {
-    setText(this.startBtn, running ? '❚❚  Pause' : '▶  Start');
-    this.startBtn.classList.toggle('running', running);
+  setRunning(running: boolean, started: boolean) {
+    const b = this.q<HTMLButtonElement>('#play');
+    b.innerHTML = running ? `${svg('pause')}<span>Pause</span>` : `${svg('play')}<span>${started ? 'Resume' : 'Start mission'}</span>`;
+    b.classList.toggle('is-running', running);
   }
 
-  setMetrics(m: Metrics, flood: FloodState | null): void {
-    const e = this.metricEls;
-    setText(e.area, pct(m.areaSearchedFrac, 1));
-    setText(e.survivors, `${m.survivorsFound}/${m.survivorsTotal}`);
-    setText(e.time, fmtTime(m.time));
-    setText(e.redundancy, pct(m.redundancyFrac));
-    setText(e.pop, m.populationTotal > 0 ? `${pct(m.populationReached / m.populationTotal)} (${Math.round(m.populationReached).toLocaleString()})` : '–');
-    setText(e.util, pct(m.droneUtilization));
-    setText(e.tasks, `${m.tasksCompleted} / ${m.tasksReassigned}`);
-    setText(e.failures, String(m.droneFailures));
-    setText(e.lost, String(m.survivorsLost));
-    setText(e.dist, `${(m.distanceTravelled * 0.03).toFixed(1)} km`);
-    this.areaBar.style.width = pct(m.areaSearchedFrac, 2);
+  setState(state: SimState) {
+    const m = state.metrics;
+    this.q('#m-area').textContent = `${Math.round(m.areaSearchedFrac * 100)}%`;
+    this.q<HTMLElement>('#m-area-bar').style.width = `${m.areaSearchedFrac * 100}%`;
+    this.q('#m-found').textContent = `${m.survivorsFound}`;
+    this.q('#m-total').textContent = `/ ${m.survivorsTotal}`;
+    this.q('#m-lost').textContent = `${m.survivorsLost}`;
+    this.q('#m-time').textContent = fmtTime(state.time);
+    this.q('#clock').textContent = fmtTime(state.time);
 
-    if (flood && !flood.impacted) {
-      this.banner.className = `banner warn${flood.timeToImpact < 30 ? ' urgent' : ''}`;
-      setText(this.banner, `⚠ TSUNAMI IMPACT IN ${fmtTime(Math.max(0, flood.timeToImpact))}  ·  run-up ${flood.runupM.toFixed(0)} m`);
-    } else if (flood && flood.impacted) {
-      this.banner.className = 'banner impact';
-      setText(this.banner, `≈ WAVE HAS HIT  ·  ${m.survivorsLost} survivor${m.survivorsLost === 1 ? '' : 's'} lost`);
-    } else {
-      this.banner.className = 'banner hidden';
+    const chip = this.q<HTMLElement>('#tsunami');
+    if (state.flood) {
+      chip.hidden = false;
+      chip.classList.toggle('hit', state.flood.impacted);
+      chip.textContent = state.flood.impacted
+        ? `Wave hit · ${m.survivorsLost} lost`
+        : `Tsunami in ${fmtTime(Math.max(0, state.flood.timeToImpact))}`;
+    } else chip.hidden = true;
+    this.q<HTMLElement>('#lost-tile').hidden = !state.flood;
+
+    this.renderFleet(state);
+  }
+
+  log(events: SimEvent[]) {
+    const feed = this.q('#feed');
+    for (const e of events) {
+      if (!FEED_TYPES.has(e.type)) continue;
+      const row = document.createElement('div');
+      row.className = `ev ev-${e.type}`;
+      const dot = e.droneId ? `<i class="dot" style="background:${droneColorCss(e.droneId)}"></i>` : `<i class="dot"></i>`;
+      row.innerHTML = `${dot}<div><p></p><time>${fmtTime(e.t)}</time></div>`;
+      row.querySelector('p')!.textContent = e.message;
+      feed.prepend(row);
     }
+    while (feed.children.length > 60) feed.lastElementChild!.remove();
   }
 
-  setDrones(drones: DroneView[]): void {
-    const seen = new Set<number>();
-    for (const d of drones) {
-      seen.add(d.id);
-      let r = this.droneRows.get(d.id);
-      if (!r) {
-        const status = el('span', { class: 'status' });
-        const bar = el('div', { class: 'batt-fill' });
-        const battTxt = el('span', { class: 'batt-txt' });
-        const task = el('span', { class: 'task' });
-        const row = el('div', { class: 'drone-row' },
-          el('span', { class: 'swatch', style: `background:${droneColorHex(d.id)};box-shadow:0 0 10px ${droneColorHex(d.id)}` }),
-          el('span', { class: 'drone-id' }, `D${d.id}`),
-          status,
-          el('div', { class: 'batt' }, bar),
-          battTxt,
-          task,
-        );
-        r = { row, status, bar, battTxt, task };
-        this.droneRows.set(d.id, r);
-        this.roster.append(row);
-      }
-      setText(r.status, STATUS_LABEL[d.status]);
-      r.status.className = `status st-${d.status}`;
-      r.row.classList.toggle('disabled', d.status === 'DISABLED');
-      const b = Math.max(0, Math.min(1, d.battery));
-      r.bar.style.width = pct(b);
-      r.bar.style.background = `hsl(${Math.round(120 * b)}, 85%, 55%)`;
-      setText(r.battTxt, pct(b));
-      setText(r.task, d.taskId !== null ? `#${d.taskId}` : '—');
-    }
-    for (const [id, r] of this.droneRows) {
-      if (seen.has(id)) continue;
-      r.row.remove();
-      this.droneRows.delete(id);
-    }
+  clearLog() {
+    this.q('#feed').innerHTML = '';
   }
 
-  log(events: SimEvent[]): void {
-    for (const ev of events) {
-      const style = EVENT_STYLE[ev.type] ?? { icon: '•', cls: '' };
-      const who = ev.droneId !== undefined
-        ? el('span', { class: 'ev-drone', style: `color:${droneColorHex(ev.droneId)}` }, `D${ev.droneId}`)
-        : null;
-      const item = el('div', { class: `ev ${style.cls}` },
-        el('span', { class: 'ev-icon' }, style.icon),
-        el('span', { class: 'ev-time' }, fmtTime(ev.t)),
-        who,
-        el('span', { class: 'ev-msg' }, ev.message),
-      );
-      this.logList.prepend(item);
-    }
-    while (this.logList.childElementCount > 100) this.logList.lastElementChild!.remove();
+  showResults(m: Metrics, tsunami: boolean) {
+    const r = this.q('#results');
+    r.querySelector('.r-grid')!.innerHTML = [
+      ['Area searched', `${Math.round(m.areaSearchedFrac * 100)}%`],
+      ['Survivors found', `${m.survivorsFound} / ${m.survivorsTotal}`],
+      ...(tsunami ? [['Lost to the wave', `${m.survivorsLost}`]] : []),
+      ['Mission time', fmtTime(m.time)],
+      ['Drone failures', `${m.droneFailures}`],
+      ['Duplicate search', `${Math.round(m.redundancyFrac * 100)}%`],
+    ]
+      .map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`)
+      .join('');
+    r.hidden = false;
   }
 
-  showResults(m: Metrics): void {
-    const stat = (v: string, l: string, cls = '') => el('div', { class: 'res-stat' }, el('div', { class: `res-val ${cls}` }, v), el('div', { class: 'res-label' }, l));
-    this.results.replaceChildren(
-      el('div', { class: 'res-card' },
-        el('div', { class: 'res-title' }, 'SEARCH COMPLETE'),
-        el('div', { class: 'res-grid' },
-          stat(pct(m.areaSearchedFrac, 1), 'Area searched', 'accent-cyan'),
-          stat(`${m.survivorsFound}/${m.survivorsTotal}`, 'Survivors found', 'accent-pink'),
-          stat(fmtTime(m.time), 'Mission time'),
-          stat(String(m.droneFailures), 'Drone failures'),
-          stat(pct(m.redundancyFrac), 'Redundancy'),
-          stat(String(m.survivorsLost), 'Survivors lost'),
-        ),
-        el('div', { class: 'btn-row' },
-          el('button', { class: 'btn', onclick: () => this.results.classList.add('hidden') }, 'Close'),
-          el('button', { class: 'btn btn-primary', onclick: () => { this.results.classList.add('hidden'); this.reset(); } }, '↺ Run again'),
-        ),
-      ),
-    );
-    this.results.classList.remove('hidden');
+  hideResults() {
+    this.q('#results').hidden = true;
   }
 
-  hideResults(): void {
-    this.results.classList.add('hidden');
+  showPlace(p: PlaceInfo) {
+    const pop = this.q<HTMLElement>('#place');
+    pop.querySelector('h4')!.textContent = p.street ?? 'Unnamed spot';
+    pop.querySelector('small')!.textContent = `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`;
+    const ll = `${p.lat.toFixed(6)},${p.lon.toFixed(6)}`;
+    (pop.querySelector('#gmaps') as HTMLAnchorElement).href = `https://www.google.com/maps/search/?api=1&query=${ll}`;
+    (pop.querySelector('#gsv') as HTMLAnchorElement).href = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${ll}`;
+    const x = Math.min(window.innerWidth - 260, Math.max(12, p.clientX + 14));
+    const y = Math.min(window.innerHeight - 140, Math.max(12, p.clientY - 20));
+    pop.style.left = `${x}px`;
+    pop.style.top = `${y}px`;
+    pop.hidden = false;
   }
 
-  // ---------------------------------------------------------------- internals
-
-  private reset(): void {
-    this.pendingReset = false;
-    this.pendingNote.classList.add('hidden');
-    this.results.classList.add('hidden');
-    this.logList.replaceChildren();
-    this.cb.onReset(structuredClone(this.config));
+  hidePlace() {
+    this.q('#place').hidden = true;
   }
 
-  private setupChange(partial: Partial<SimConfig>): void {
-    Object.assign(this.config, partial);
-    if (!this.pendingReset) {
-      this.pendingReset = true;
-      this.pendingNote.classList.remove('hidden');
-    }
+  toast(msg: string) {
+    const t = this.q('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout((t as unknown as { _h: number })._h);
+    (t as unknown as { _h: number })._h = window.setTimeout(() => t.classList.remove('show'), 2200);
   }
 
-  private panel(side: 'left' | 'right', title: string, children: HTMLElement[]): HTMLElement {
-    const body = el('div', { class: 'panel-body' }, ...children);
-    const p = el('aside', { class: `panel panel-${side}` });
-    const toggle = el('button', { class: 'collapse', title: 'Collapse', onclick: () => p.classList.toggle('collapsed') }, side === 'left' ? '❮' : '❯');
-    p.append(el('header', { class: 'panel-head' }, el('span', { class: 'panel-title' }, title), toggle), body);
-    return p;
+  setTool(tool: Tool) {
+    this.tool = tool;
+    this.el.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) => b.classList.toggle('active', b.dataset.tool === tool));
+    this.q('#hint').textContent = TOOLS.find((t) => t.id === tool)!.hint;
+    document.body.dataset.tool = tool;
   }
 
-  private section(title: string, content: HTMLElement, collapsed = false): HTMLElement {
-    const s = el('section', { class: `section${collapsed ? ' collapsed' : ''}` });
-    s.append(el('h3', { class: 'section-head', onclick: () => s.classList.toggle('collapsed') }, title), el('div', { class: 'section-body' }, content));
-    return s;
+  setFollow(id: number | null) {
+    this.follow = id;
+    this.fleetKey = '';
   }
 
-  private slider(label: string, min: number, max: number, step: number, value: number, fmt: (v: number) => string, onInput: (v: number) => void, hint?: string): HTMLElement {
-    const out = el('span', { class: 'slider-val' }, fmt(value));
-    const input = el('input', { type: 'range', min, max, step, value: String(value) }) as HTMLInputElement;
-    input.addEventListener('input', () => {
-      const v = Number(input.value);
-      setText(out, fmt(v));
-      onInput(v);
+  // ---------------------------------------------------------------------------
+
+  private template(): string {
+    const c = this.config;
+    const w = c.weights;
+    const weight = (k: keyof Weights, label: string) =>
+      `<label class="slider"><span>${label}</span><input type="range" min="0" max="3" step="0.1" value="${w[k]}" data-weight="${k}"><output>${w[k].toFixed(1)}</output></label>`;
+    return `
+      <header class="brand card">
+        <div class="logo">${svg('fail', 16)}</div>
+        <div><h1>Rescue Drone Swarm</h1><p>Lonsdale · North Vancouver</p></div>
+      </header>
+
+      <div class="transport card">
+        <button id="play" class="btn primary"></button>
+        <div class="seg" id="speed">${[1, 2, 4, 8].map((s) => `<button data-speed="${s}" class="${s === 1 ? 'on' : ''}">${s}×</button>`).join('')}</div>
+        <button id="reset" class="btn icon" title="Restart mission">${svg('reset')}</button>
+        <span class="clock" id="clock">00:00</span>
+        <span class="chip danger" id="tsunami" hidden></span>
+      </div>
+
+      <aside class="panel left card">
+        <section>
+          <h3>Scenario</h3>
+          <div class="seg wide" id="scenario">
+            <button data-scenario="none" class="on">Search &amp; rescue</button>
+            <button data-scenario="tsunami">Tsunami warning</button>
+          </div>
+        </section>
+        <section>
+          <h3>What the drones know</h3>
+          ${this.toggle('geography', 'Street map', 'Buildings and streets known in advance')}
+          ${this.toggle('population', 'Population', 'Where people live, plus crowds you report')}
+          ${this.toggle('disaster', 'Hazard warning', 'Tsunami flood zone and countdown')}
+        </section>
+        <section>
+          <h3>Fleet <em>changes restart the mission</em></h3>
+          ${this.stepper('droneCount', 'Drones', 1, 12)}
+          ${this.stepper('truckCount', 'Charging trucks', 1, 4)}
+          ${this.stepper('survivorCount', 'Random survivors', 0, 60, 5)}
+        </section>
+        <details>
+          <summary>Advanced</summary>
+          <label class="slider"><span>Flight altitude</span><input type="range" id="alt" min="10" max="60" step="5" value="${c.flightAltitudeM}"><output>${c.flightAltitudeM} m</output></label>
+          <label class="slider"><span>Camera range</span><input type="range" id="sensor" min="2" max="8" step="1" value="${c.sensorRange}"><output>${c.sensorRange * 10} m</output></label>
+          <label class="slider"><span>Battery</span><input type="range" id="battery" min="500" max="3000" step="100" value="${c.batteryCapacity}"><output>${(c.batteryCapacity / 100).toFixed(0)} km</output></label>
+          <h4>Priority weights</h4>
+          ${weight('population', 'Population')}
+          ${weight('hazard', 'Hazard')}
+          ${weight('urgency', 'Urgency')}
+          ${weight('information', 'Unsearched area')}
+          ${weight('distance', 'Distance cost')}
+          ${weight('battery', 'Battery cost')}
+          ${weight('redundancy', 'Avoid overlap')}
+        </details>
+      </aside>
+
+      <aside class="panel right card">
+        <section class="stats">
+          <div class="stat wide"><span>Area searched</span><b id="m-area">0%</b><div class="bar"><i id="m-area-bar"></i></div></div>
+          <div class="stat"><span>Survivors found</span><b><span id="m-found">0</span><small id="m-total">/ 0</small></b></div>
+          <div class="stat" id="lost-tile" hidden><span>Lost to wave</span><b id="m-lost">0</b></div>
+          <div class="stat"><span>Mission time</span><b id="m-time">00:00</b></div>
+        </section>
+        <section>
+          <h3>Fleet <em>click to follow</em></h3>
+          <div id="fleet"></div>
+        </section>
+        <section class="grow">
+          <h3>What the drones are deciding</h3>
+          <div id="feed"></div>
+        </section>
+      </aside>
+
+      <div class="toolbar card">
+        ${TOOLS.map((t) => `<button class="tool" data-tool="${t.id}" title="${t.label}">${svg(t.icon, 20)}<span>${t.label}</span></button>`).join('')}
+      </div>
+      <div class="hint" id="hint"></div>
+
+      <div class="legend card">
+        <div class="keys">
+          <span><i class="k k-unsearched"></i>Not searched</span>
+          <span><i class="k k-searched"></i>Searched</span>
+          <span><i class="k k-frontier"></i>Frontier</span>
+          <span><i class="k k-tall"></i>Too tall to overfly</span>
+          <span><i class="k k-survivor"></i>Survivor found</span>
+          <span><i class="k k-truck"></i>Charging truck</span>
+        </div>
+        <div class="views">
+          ${this.view('showPaths', 'Flight paths', true)}
+          ${this.view('showSensors', 'Camera view', true)}
+          ${this.view('showLabels', 'Street names', true)}
+          ${this.view('revealHidden', 'Reveal hidden survivors', false)}
+        </div>
+      </div>
+
+      <div class="place card" id="place" hidden>
+        <button class="x" id="place-close">${svg('close', 14)}</button>
+        <div class="pin">${svg('street', 16)}</div>
+        <h4></h4><small></small>
+        <div class="row">
+          <a id="gmaps" class="btn small" target="_blank" rel="noopener">${svg('map', 14)} Google Maps</a>
+          <a id="gsv" class="btn small" target="_blank" rel="noopener">Street View</a>
+        </div>
+      </div>
+
+      <div class="modal" id="results" hidden>
+        <div class="card">
+          <h2>Search complete</h2>
+          <div class="r-grid"></div>
+          <div class="row">
+            <button class="btn" id="r-close">Keep looking</button>
+            <button class="btn primary" id="r-again">${svg('reset', 16)} Run again</button>
+          </div>
+        </div>
+      </div>
+      <div class="toast" id="toast"></div>`;
+  }
+
+  private toggle(key: keyof InfoModes, label: string, desc: string): string {
+    return `<label class="switch" data-info="${key}"><input type="checkbox"><i></i><div><b>${label}</b><span>${desc}</span></div></label>`;
+  }
+
+  private stepper(key: keyof SimConfig, label: string, min: number, max: number, step = 1): string {
+    return `<div class="stepper" data-key="${key}" data-min="${min}" data-max="${max}" data-step="${step}"><span>${label}</span><button data-d="-1">−</button><output></output><button data-d="1">+</button></div>`;
+  }
+
+  private view(key: keyof RenderOptions, label: string, on: boolean): string {
+    return `<label class="check"><input type="checkbox" data-view="${key}" ${on ? 'checked' : ''}>${label}</label>`;
+  }
+
+  private bind() {
+    this.q('#play').addEventListener('click', () => this.cb.onStartPause());
+    this.q('#reset').addEventListener('click', () => this.cb.onReset());
+    this.q('#r-again').addEventListener('click', () => this.cb.onReset());
+    this.q('#r-close').addEventListener('click', () => this.hideResults());
+    this.q('#place-close').addEventListener('click', () => this.hidePlace());
+
+    this.q('#speed').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (!b) return;
+      this.q('#speed').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+      this.cb.onSpeed(Number(b.dataset.speed));
     });
-    return el('label', { class: 'slider', title: hint }, el('div', { class: 'slider-top' }, el('span', {}, label), out), input);
-  }
-
-  private select(label: string, options: [string, string][], value: string, onChange: (v: string) => void): HTMLElement {
-    const sel = el('select', { onchange: (e: Event) => onChange((e.target as HTMLSelectElement).value) }, ...options.map(([v, l]) => el('option', { value: v }, l)));
-    sel.value = value;
-    return el('label', { class: 'select' }, el('span', {}, label), sel);
-  }
-
-  private chip(label: string, on: boolean, onToggle: (on: boolean) => void): HTMLElement {
-    const b = el('button', { class: `chip${on ? ' on' : ''}` }, label);
-    b.addEventListener('click', () => {
-      const v = !b.classList.contains('on');
-      b.classList.toggle('on', v);
-      onToggle(v);
+    this.q('#scenario').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button');
+      if (!b) return;
+      const s = b.dataset.scenario as Scenario;
+      if (s === this.config.scenario) return;
+      this.config.scenario = s;
+      if (s === 'tsunami') this.config.info = { ...this.config.info, disaster: true, elevation: true };
+      else this.config.info = { ...this.config.info, disaster: false, elevation: false };
+      this.syncSetup();
+      this.cb.onScenario(s);
     });
-    return b;
-  }
-
-  private segmented(values: number[], initial: number, onPick: (v: number) => void): HTMLElement {
-    const wrap = el('div', { class: 'segmented' });
-    for (const v of values) {
-      const b = el('button', { class: `seg${v === initial ? ' on' : ''}` }, `${v}×`);
-      b.addEventListener('click', () => {
-        wrap.querySelectorAll('.seg').forEach((s) => s.classList.remove('on'));
-        b.classList.add('on');
-        onPick(v);
+    this.el.querySelectorAll<HTMLLabelElement>('.switch').forEach((sw) => {
+      const input = sw.querySelector('input')!;
+      input.addEventListener('change', () => {
+        const key = sw.dataset.info as keyof InfoModes;
+        const patch: Partial<InfoModes> = { [key]: input.checked };
+        if (key === 'disaster') patch.elevation = input.checked;
+        this.config.info = { ...this.config.info, ...patch };
+        this.cb.onInfo(patch);
       });
-      wrap.append(b);
-    }
-    return wrap;
+    });
+    this.el.querySelectorAll<HTMLElement>('.stepper').forEach((st) => {
+      st.addEventListener('click', (e) => {
+        const b = (e.target as HTMLElement).closest('button');
+        if (!b) return;
+        const key = st.dataset.key as keyof SimConfig;
+        const v = Math.min(Number(st.dataset.max), Math.max(Number(st.dataset.min), (this.config[key] as number) + Number(b.dataset.d) * Number(st.dataset.step)));
+        if (v === this.config[key]) return;
+        (this.config as unknown as Record<string, number>)[key] = v;
+        this.syncSetup();
+        this.cb.onSetup({ [key]: v });
+      });
+    });
+    const slider = (id: string, key: keyof SimConfig, fmt: (v: number) => string) => {
+      const input = this.q<HTMLInputElement>(`#${id}`);
+      const out = input.nextElementSibling as HTMLOutputElement;
+      input.addEventListener('input', () => (out.textContent = fmt(Number(input.value))));
+      input.addEventListener('change', () => {
+        (this.config as unknown as Record<string, number>)[key] = Number(input.value);
+        this.cb.onSetup({ [key]: Number(input.value) });
+      });
+    };
+    slider('alt', 'flightAltitudeM', (v) => `${v} m`);
+    slider('sensor', 'sensorRange', (v) => `${v * 10} m`);
+    slider('battery', 'batteryCapacity', (v) => `${(v / 100).toFixed(0)} km`);
+    this.el.querySelectorAll<HTMLInputElement>('[data-weight]').forEach((input) => {
+      const out = input.nextElementSibling as HTMLOutputElement;
+      input.addEventListener('input', () => {
+        out.textContent = Number(input.value).toFixed(1);
+        const k = input.dataset.weight as keyof Weights;
+        this.config.weights = { ...this.config.weights, [k]: Number(input.value) };
+        this.cb.onWeights({ [k]: Number(input.value) });
+      });
+    });
+    this.el.querySelectorAll<HTMLButtonElement>('.tool').forEach((b) =>
+      b.addEventListener('click', () => {
+        this.setTool(b.dataset.tool as Tool);
+        this.cb.onTool(this.tool);
+      }),
+    );
+    this.el.querySelectorAll<HTMLInputElement>('[data-view]').forEach((input) =>
+      input.addEventListener('change', () => this.cb.onView({ [input.dataset.view as keyof RenderOptions]: input.checked })),
+    );
+    this.q('#fleet').addEventListener('click', (e) => {
+      const row = (e.target as HTMLElement).closest<HTMLElement>('[data-drone]');
+      if (!row) return;
+      const id = Number(row.dataset.drone);
+      this.setFollow(this.follow === id ? null : id);
+      this.cb.onFollow(this.follow);
+    });
   }
 
-  dispose(): void {
-    this.root.replaceChildren();
-    this.root.classList.remove('sar-ui');
+  private syncSetup() {
+    const c = this.config;
+    this.q('#scenario').querySelectorAll<HTMLButtonElement>('button').forEach((b) => b.classList.toggle('on', b.dataset.scenario === c.scenario));
+    this.el.querySelectorAll<HTMLLabelElement>('.switch').forEach((sw) => {
+      const key = sw.dataset.info as keyof InfoModes;
+      const input = sw.querySelector('input')!;
+      input.checked = c.info[key];
+      const disabled = key === 'disaster' && c.scenario === 'none';
+      input.disabled = disabled;
+      sw.classList.toggle('disabled', disabled);
+    });
+    this.el.querySelectorAll<HTMLElement>('.stepper').forEach((st) => {
+      st.querySelector('output')!.textContent = String(c[st.dataset.key as keyof SimConfig]);
+    });
   }
+
+  private renderFleet(state: SimState) {
+    const labels = new Map(state.tasks.map((t) => [t.id, t.label]));
+    const rows = state.drones.map((d) => {
+      let text = STATUS_TEXT[d.status];
+      if (d.dockedTruck !== null && d.status !== 'CHARGING') {
+        text = `On Truck ${d.dockedTruck}`;
+        if (d.taskId != null) text += ` · next: ${labels.get(d.taskId) ?? ''}`;
+      } else if ((d.status === 'SEARCHING' || d.status === 'TRAVELLING') && d.taskId != null) text += ` ${labels.get(d.taskId) ?? ''}`;
+      else if (d.status === 'CHARGING' && d.dockedTruck !== null) text += ` on Truck ${d.dockedTruck}`;
+      return { d, text: text.trim(), batt: Math.round(d.battery * 100) };
+    });
+    const key = rows.map((r) => `${r.d.id}${r.text}${Math.round(r.batt / 5)}`).join('|') + this.follow;
+    if (key === this.fleetKey) return;
+    this.fleetKey = key;
+    this.q('#fleet').innerHTML = rows
+      .map(({ d, text, batt }) => {
+        const cls = d.status === 'DISABLED' ? 'down' : batt < 25 ? 'low' : '';
+        return `<button class="drone ${cls} ${this.follow === d.id ? 'following' : ''}" data-drone="${d.id}">
+          <i class="dot" style="background:${droneColorCss(d.id)}"></i>
+          <b>D${d.id}</b><span class="st"></span>
+          <span class="batt"><i style="width:${batt}%"></i></span>
+        </button>`;
+      })
+      .join('');
+    this.q('#fleet')
+      .querySelectorAll('.st')
+      .forEach((el, i) => (el.textContent = rows[i].text));
+  }
+}
+
+function fmtTime(t: number): string {
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60);
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }

@@ -10,6 +10,7 @@ export class Drone implements DroneView {
   trail: { x: number; y: number }[] = [];
   taskId: number | null = null;
   distanceTravelled = 0;
+  dockedTruck: number | null = null;
 
   batteryCells: number;
   charging = false;
@@ -36,6 +37,10 @@ export class Drone implements DroneView {
   drain(cells: number) {
     this.batteryCells = Math.max(0, this.batteryCells - cells);
     this.battery = this.batteryCells / this.capacity;
+  }
+
+  get airborne(): boolean {
+    return this.active && this.dockedTruck === null;
   }
 
   /** Move along the waypoint list by up to `budget` cells. Returns distance moved. */

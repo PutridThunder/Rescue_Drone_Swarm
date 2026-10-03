@@ -46,6 +46,8 @@ export function makeTestWorld(width = 60, height = 50): World {
     buildingHeight,
     population,
     coastDistance: new Float32Array(n),
+    roadName: new Int16Array(n).fill(-1),
+    roadNames: [],
     base: { x: Math.floor(width / 2), y: Math.floor(height * 0.45) },
   };
   world.coastDistance = coastDistance(world);

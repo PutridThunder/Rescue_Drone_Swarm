@@ -30,7 +30,9 @@ export interface World {
   buildingHeight: Float32Array; // metres, 0 if no building
   population: Float32Array; // estimated residents per cell (prior, not truth)
   coastDistance: Float32Array; // cells to nearest water cell (0 for water)
-  base: { x: number; y: number }; // drone launch / recharge site
+  base: { x: number; y: number }; // truck staging area
+  roadName: Int16Array; // index into roadNames per cell, -1 if none
+  roadNames: string[];
 }
 
 // On-disk JSON shape (public/world.json). Loader converts arrays to typed arrays.
@@ -41,6 +43,15 @@ export interface WorldJSON {
   buildingHeight: number[];
   population: number[];
   base: { x: number; y: number };
+  roadName?: number[];
+  roadNames?: string[];
+}
+
+// Vector map for rendering (public/map.json). Coordinates are in grid cells (float).
+export interface MapJSON {
+  buildings: { p: number[]; h: number }[]; // outer ring as flat [x0, y0, x1, y1, ...], height m
+  roads: { p: number[]; w: number; n: number }[]; // polyline, width m, name index (-1 none)
+  roadNames: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -69,6 +80,8 @@ export type Scenario = 'none' | 'tsunami';
 export interface SimConfig {
   seed: number;
   droneCount: number;
+  truckCount: number;
+  flightAltitudeM: number; // drones fly at this height above ground; taller buildings are obstacles
   sensorRange: number; // cells
   batteryCapacity: number; // cells of travel on a full charge
   speed: number; // cells per simulated second
@@ -90,6 +103,7 @@ export type DroneStatus =
   | 'SEARCHING'
   | 'RETURNING'
   | 'LOW_BATTERY'
+  | 'CHARGING'
   | 'DISABLED';
 
 export interface DroneView {
@@ -104,6 +118,26 @@ export interface DroneView {
   trail: { x: number; y: number }[]; // recent history, capped (e.g. last 300 points)
   taskId: number | null;
   distanceTravelled: number; // cells
+  dockedTruck: number | null; // truck the drone is sitting on (landed), else null
+}
+
+export type TruckStatus = 'PARKED' | 'DRIVING';
+
+export interface TruckView {
+  id: number;
+  x: number;
+  y: number;
+  heading: number;
+  status: TruckStatus;
+  path: { x: number; y: number }[];
+}
+
+export interface CrowdView {
+  id: number;
+  x: number;
+  y: number;
+  radius: number; // cells
+  people: number; // added to the population prior
 }
 
 export interface TaskView {
@@ -112,6 +146,7 @@ export interface TaskView {
   y0: number;
   x1: number; // exclusive
   y1: number;
+  label: string; // human-readable location, e.g. "Lonsdale Ave & W 3rd St"
   priority: number; // normalized 0..1 among current tasks
   breakdown: Partial<Record<keyof Weights | 'rescue', number>>; // normalized term values 0..1
   assignedDrone: number | null;
@@ -127,6 +162,7 @@ export interface SurvivorView {
   foundBy: number | null;
   foundAt: number | null; // sim time
   lost: boolean; // e.g. flooded before being found
+  placed: boolean; // planted by the user (vs randomly generated)
 }
 
 export interface Metrics {
@@ -163,6 +199,8 @@ export type SimEventType =
   | 'recharged'
   | 'taskComplete'
   | 'impact'
+  | 'truck'
+  | 'placed'
   | 'complete';
 
 export interface SimEvent {
@@ -186,6 +224,8 @@ export interface SimState {
   config: SimConfig;
   knowledge: KnowledgeView;
   drones: DroneView[];
+  trucks: TruckView[];
+  crowds: CrowdView[];
   tasks: TaskView[];
   survivors: SurvivorView[]; // ground truth; renderer shows found ones (all in debug)
   flood: FloodState | null;
@@ -200,4 +240,7 @@ export interface ISimulation {
   drainDirtyCells(): number[]; // cell indices whose knowledge changed since last drain
   disableDrone(id?: number): number | null; // random active drone if id omitted
   updateConfig(partial: Partial<SimConfig>): void; // weights/info modes apply live; others on reset
+  addSurvivor(x: number, y: number): SurvivorView | null; // hidden from the fleet
+  addCrowd(x: number, y: number): CrowdView | null; // population hotspot (prior) + hidden survivors
+  removeNear(x: number, y: number, radius: number): number; // removes placed items, returns count
 }

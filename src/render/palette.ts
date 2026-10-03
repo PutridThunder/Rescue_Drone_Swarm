@@ -1,44 +1,36 @@
-import { Color } from 'three';
+// Light, minimal map palette shared by the 3D scene and the HUD.
 
-export const DRONE_COLORS = [
-  '#ff4f6d', '#ffb02e', '#ffe14d', '#5df08a', '#38d6ff', '#a98bff',
-  '#ff7ad1', '#20e3b2', '#6f9dff', '#ff8a4c', '#c8f560', '#f05bff',
-];
-
-export function droneColorHex(id: number): string {
-  return DRONE_COLORS[((id % DRONE_COLORS.length) + DRONE_COLORS.length) % DRONE_COLORS.length];
-}
-
-export function droneColor(id: number): Color {
-  return new Color(droneColorHex(id));
-}
-
-export const COLORS = {
-  water: new Color('#4aa8e8'),
-  waterDeep: new Color('#2f7fc4'),
-  ground: new Color('#d8d0c2'),
-  road: new Color('#f4efe4'),
-  park: new Color('#9ed27f'),
-  forest: new Color('#5fa86a'),
-  fog: new Color('#1a2240'),
-  fogHigh: new Color('#2a3459'),
-  frontier: new Color('#3ff6ff'),
-  hazard: new Color('#ff4a1c'),
-  survivor: new Color('#ff2fa0'),
-  survivorGlow: new Color('#ffe14d'),
-  disabled: new Color('#6b7280'),
+export const SCENE = {
+  background: 0xeef1f5,
+  ground: 0xebe9e3,
+  park: 0xcfe3c3,
+  water: 0x9ccfe8,
+  road: 0xffffff,
+  buildingUnsearched: 0xcdd3dc,
+  buildingSearched: 0xffffff,
+  buildingTall: 0xb3bfd0, // above flight altitude: drones must go around
+  buildingHazard: 0xf1b3a6,
+  fogUnknown: [0x6b7385, 0.5] as const,
+  fogUnsearched: [0x8d97a8, 0.2] as const,
+  frontier: [0x2f6fed, 0.38] as const,
+  hazard: [0xe8503f, 0.26] as const,
+  population: [0xf29d38, 0.55] as const,
+  flood: [0x2f86d6, 0.7] as const,
+  truckBody: 0xffffff,
+  truckCab: 0x2b3445,
+  truckAccent: 0xf08c2e,
+  survivorFound: 0xf0445a,
+  survivorHidden: 0x8e97a6,
+  crowd: 0xf29d38,
 };
 
-export const BUILDING_COLORS = [
-  '#f6d5c4', '#f7e6bd', '#d6e2f6', '#e7d3f2', '#fbdcdc', '#d2efe3', '#efede6', '#fde9cf',
-].map((c) => new Color(c));
+// Distinct, saturated-but-friendly drone colours that read on a light map.
+export const DRONE_COLORS = [0x2f6fed, 0x10a37f, 0xe8590c, 0x9b51e0, 0xd6336c, 0x0c9fb8, 0x8a6d00, 0x4c6ef5, 0x2b8a3e, 0xc2255c, 0x5f3dc4, 0x1098ad];
 
-/** Heat ramp for the population overlay: t in 0..1. */
-const HEAT_STOPS = ['#3b1c6e', '#c2266b', '#ff7a1a', '#ffe45c'].map((c) => new Color(c));
+export function droneColor(id: number): number {
+  return DRONE_COLORS[(id - 1) % DRONE_COLORS.length];
+}
 
-export function heatColor(t: number, out: Color): Color {
-  const stops = HEAT_STOPS;
-  const f = Math.min(0.999, Math.max(0, t)) * (stops.length - 1);
-  const i = Math.floor(f);
-  return out.copy(stops[i]).lerp(stops[i + 1], f - i);
+export function droneColorCss(id: number): string {
+  return `#${droneColor(id).toString(16).padStart(6, '0')}`;
 }

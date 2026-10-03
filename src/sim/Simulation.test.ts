@@ -60,7 +60,7 @@ describe('Simulation', () => {
     expect(victim.status).toBe('DISABLED');
     expect(victim.taskId).toBeNull();
     events.push(...sim.drainEvents());
-    expect(events.some((e) => e.type === 'failure' && e.message.includes(`Drone ${victim.id} DISABLED`))).toBe(true);
+    expect(events.some((e) => e.type === 'failure' && e.message.includes(`Drone ${victim.id} went down`))).toBe(true);
     runFor(sim, 20, 0.1, events);
     const takeover = events.find((e) => e.taskId === sector && e.message.includes(`taking over from Drone ${victim.id}`));
     expect(takeover?.type).toBe('reassign');
@@ -71,6 +71,29 @@ describe('Simulation', () => {
     expect([victim.x, victim.y]).toEqual([x, y]);
     expect(sim.disableDrone(victim.id)).toBeNull();
     expect(sim.disableDrone()).not.toBeNull(); // random active drone
+  });
+
+  it('drones launch from trucks and land on them when the mission ends', () => {
+    const sim = new Simulation(small, cfg({ droneCount: 3, truckCount: 2 }));
+    expect(sim.state.drones.every((d) => d.dockedTruck !== null)).toBe(true);
+    runFor(sim, 3);
+    expect(sim.state.drones.some((d) => d.dockedTruck === null)).toBe(true);
+    sim.start();
+    runFor(sim, 3000, 0.5);
+    expect(sim.state.metrics.complete).toBe(true);
+    for (let k = 0; k < 2000 && sim.state.running; k++) sim.step(0.5); // fly home after the mission
+    expect(sim.state.drones.every((d) => d.dockedTruck !== null)).toBe(true);
+    expect(sim.state.running).toBe(false);
+  });
+
+  it('planted survivors and crowds are tracked and removable', () => {
+    const sim = new Simulation(small, cfg({ survivorCount: 0 }));
+    expect(sim.addSurvivor(20.5, 20.5)?.placed).toBe(true);
+    const crowd = sim.addCrowd(30.5, 20.5)!;
+    expect(crowd.people).toBeGreaterThan(0);
+    expect(sim.state.metrics.survivorsTotal).toBe(4); // 1 planted + 3 in the crowd
+    expect(sim.removeNear(30.5, 20.5, 4)).toBeGreaterThanOrEqual(1);
+    expect(sim.state.crowds).toHaveLength(0);
   });
 
   it('runs to completion and reports metrics', () => {
@@ -97,8 +120,9 @@ describe('Simulation', () => {
   it('drones recharge: low battery forces a return and they rejoin afterwards', () => {
     const sim = new Simulation(small, cfg({ droneCount: 2, batteryCapacity: 120 }));
     const events = runFor(sim, 150, 0.25);
-    expect(events.some((e) => e.type === 'lowBattery')).toBe(true);
-    expect(events.some((e) => e.type === 'recharged')).toBe(true);
+    // Drones head back to a truck before running dry (allocator feasibility or the low-battery trigger).
+    expect(events.some((e) => e.type === 'lowBattery' || e.type === 'reassign')).toBe(true);
+    expect(events.some((e) => e.type === 'recharged' && /on Truck \d/.test(e.message))).toBe(true);
     expect(sim.state.metrics.batteryConsumed).toBeGreaterThan(1);
   });
 

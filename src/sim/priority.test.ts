@@ -32,6 +32,8 @@ function twoAreaWorld(): World {
     population,
     coastDistance: new Float32Array(n),
     base: { x: 15, y: 15 },
+    roadName: new Int16Array(n).fill(-1),
+    roadNames: [],
   };
   world.coastDistance = coastDistance(world);
   return world;
