@@ -171,6 +171,30 @@ function rasterLine(geom, halfWidth, fn) {
   }
 }
 
+function formatWorldJson(json) {
+  const { width, height } = json.meta;
+  const formatGrid = (values) => {
+    const rows = [];
+    for (let y = 0; y < height; y++) {
+      const row = values.slice(y * width, (y + 1) * width);
+      rows.push(`    ${JSON.stringify(row).slice(1, -1)}${y < height - 1 ? ',' : ''}`);
+    }
+    return `[\n${rows.join('\n')}\n  ]`;
+  };
+  const indent = (value) => JSON.stringify(value, null, 2).replace(/\n/g, '\n  ');
+
+  return `{\n` +
+    `  "meta": ${indent(json.meta)},\n` +
+    `  "terrain": ${formatGrid(json.terrain)},\n` +
+    `  "elevation": ${formatGrid(json.elevation)},\n` +
+    `  "buildingHeight": ${formatGrid(json.buildingHeight)},\n` +
+    `  "population": ${formatGrid(json.population)},\n` +
+    `  "base": ${indent(json.base)},\n` +
+    `  "roadName": ${formatGrid(json.roadName)},\n` +
+    `  "roadNames": ${indent(json.roadNames)}\n` +
+    `}\n`;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -385,7 +409,7 @@ async function main() {
     roadName: Array.from(roadName),
     roadNames,
   };
-  fs.writeFileSync(OUT, JSON.stringify(json));
+  fs.writeFileSync(OUT, formatWorldJson(json));
   fs.writeFileSync(OUT_MAP, JSON.stringify({ buildings: vecBuildings, roads: vecRoads, roadNames }));
   console.log(`Wrote ${OUT_MAP} (${(fs.statSync(OUT_MAP).size / 1e6).toFixed(2)} MB), ${vecBuildings.length} footprints, ${vecRoads.length} roads`);
 

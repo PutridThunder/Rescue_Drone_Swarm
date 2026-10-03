@@ -16,6 +16,7 @@ npm run build    # static production build in dist/
 ```
 
 `public/world.json` is checked in. To regenerate it from OpenStreetMap and elevation data, run `npm run data`.
+Its per-cell arrays stay flat, with one grid row per line to make the map data easier to inspect.
 
 ## How it works
 
