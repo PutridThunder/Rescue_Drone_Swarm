@@ -1,8 +1,11 @@
 import { IntelController } from "./intel/IntelController";
 import type { CrowdPlacement } from "./intel/toCrowds";
+import { AreaPicker } from "./render/AreaPicker";
+import { areaFile, currentAreaId, loadAreaIndex, openArea } from "./world/areas";
 import { loadMap, loadWorld } from "./world/loadWorld";
 import { DroneCamPanel } from "./render/DroneCamPanel";
 import { Renderer } from "./render/Renderer";
+import { QUALITY } from "./render/quality";
 import { UI, type Tool } from "./render/UI";
 import { Simulation } from "./sim/Simulation";
 import { DEFAULT_CONFIG } from "./sim/defaults";
@@ -18,7 +21,12 @@ interface Placement {
 }
 
 async function boot() {
-  const [world, map] = await Promise.all([loadWorld(), loadMap()]);
+  const areaId = currentAreaId();
+  const [world, map, areas] = await Promise.all([
+    loadWorld(areaFile(areaId, "world.json")),
+    loadMap(areaFile(areaId, "map.json")),
+    loadAreaIndex(),
+  ]);
   const renderer = new Renderer(document.getElementById("scene")!, world, map);
   let config: SimConfig = structuredClone(DEFAULT_CONFIG);
   const placements: Placement[] = [];
@@ -107,10 +115,12 @@ async function boot() {
   });
   ui.setRunning(false, false);
   ui.setState(sim.state);
+  const waterShare = world.terrain.filter((t) => t === 0).length / world.terrain.length;
+  ui.setTsunamiAvailable(waterShare > 0.02);
 
   // Drone cam: shows what the followed drone (or the chosen one) sees.
   let camDrone = 1;
-  let camOn = true;
+  let camOn = QUALITY.droneCamByDefault; // off by default on phones (it renders the scene twice)
   const droneCam = new DroneCamPanel(document.getElementById("hud")!, {
     onNext() {
       const ids = sim.state.drones.map((d) => d.id);
@@ -135,11 +145,26 @@ async function boot() {
   }
   syncDroneCam();
 
-  // Crowd intel: changing the disaster time or searching online re-seeds the mission.
-  await IntelController.create(world, ui.intelSlot, (crowds, report) => {
+  // Crowd intel: changing the disaster time re-seeds the mission.
+  // Area picker: switch between ready-made areas, or import a new one by place name.
+  const picker = new AreaPicker(ui.areaButton, areas, areaId, {
+    onSelect: openArea,
+    async onImport(query) {
+      picker.setStatus(`Finding "${query}" and building its map… (about a minute)`, true);
+      try {
+        const res = await fetch("/api/areas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        openArea(json.id);
+      } catch (err) {
+        picker.setStatus(`Import failed: ${(err as Error).message}`);
+      }
+    },
+  });
+
+  await IntelController.create(areaId, world, ui.intelSlot, (crowds) => {
     intelCrowds = crowds;
     restart();
-    if (report.mode === "live") ui.toast(`Crowd intel updated: ${crowds.length} hotspots`);
   });
 
   // Distinguish clicks from camera drags.

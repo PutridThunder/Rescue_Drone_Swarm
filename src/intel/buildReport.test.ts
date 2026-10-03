@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildReport } from "./buildReport";
 import { occupancy, vancouverTime } from "./occupancy";
-import type { Place, Signal } from "./types";
+import type { Place } from "./types";
 
 const place = (over: Partial<Place>): Place => ({
   id: "node/1",
@@ -37,25 +37,11 @@ describe("buildReport", () => {
   const quay = place({ id: "node/2", name: "Lonsdale Quay", kind: "transit", type: "ferry_terminal", capacity: 600, lat: 49.31 });
 
   it("ranks places by people expected at the disaster time", () => {
-    const r = buildReport({ places: [school, quay], at: TUESDAY_1030, mode: "snapshot" });
+    const r = buildReport({ places: [school, quay], at: TUESDAY_1030 });
     expect(r.hotspots[0].name).toBe("Queen Mary Elementary School");
     expect(r.hotspots[0].sources[0].url).toContain("openstreetmap.org/node/1");
   });
 
-  it("a crowd post about the SeaBus boosts Lonsdale Quay", () => {
-    const post: Signal = { source: "Mastodon", type: "post", title: "SeaBus is packed", text: "huge lineup for the seabus, festival crowd", url: "https://example.org/p/1" };
-    const without = buildReport({ places: [quay], at: TUESDAY_1030, mode: "live" }).hotspots[0];
-    const withPost = buildReport({ places: [quay], at: TUESDAY_1030, signals: [post], mode: "live" }).hotspots[0];
-    expect(withPost.people).toBeGreaterThan(without.people);
-    expect(withPost.confidence).toBeGreaterThan(without.confidence);
-    expect(withPost.sources.map((s) => s.url)).toContain(post.url);
-  });
-
-  it("scheduled events become hotspots", () => {
-    const ev: Signal = { source: "Ticketmaster", type: "event", title: "Waterfront Concert", text: "", url: "https://example.org/e/1", lat: 49.309, lon: -123.08, people: 3000 };
-    const r = buildReport({ places: [school], at: TUESDAY_1030, signals: [ev], mode: "live" });
-    expect(r.hotspots[0]).toMatchObject({ name: "Waterfront Concert", kind: "event", people: 3000 });
-  });
 });
 
 describe("regional events", () => {
@@ -75,16 +61,16 @@ describe("regional events", () => {
 
   it("fans heading to BC Place crowd the SeaBus terminal before kickoff", () => {
     const at = new Date("2026-06-18T13:45:00-07:00");
-    const normal = buildReport({ places: [quay], at, mode: "snapshot" }).hotspots[0];
-    const fifa = buildReport({ places: [quay], at, regional: [match], mode: "snapshot" }).hotspots[0];
+    const normal = buildReport({ places: [quay], at }).hotspots[0];
+    const fifa = buildReport({ places: [quay], at, regional: [match] }).hotspots[0];
     expect(fifa.people).toBeGreaterThan(normal.people + 500);
     expect(fifa.why).toContain("heading to FIFA World Cup: Canada vs Qatar");
   });
 
   it("local pubs fill up during a Canada match", () => {
     const at = new Date("2026-06-18T16:00:00-07:00");
-    expect(buildReport({ places: [pub], at, mode: "snapshot" }).hotspots).toHaveLength(0); // quiet weekday afternoon
-    const fifa = buildReport({ places: [pub], at, regional: [match], mode: "snapshot" }).hotspots[0];
+    expect(buildReport({ places: [pub], at }).hotspots).toHaveLength(0); // quiet weekday afternoon
+    const fifa = buildReport({ places: [pub], at, regional: [match] }).hotspots[0];
     expect(fifa.people).toBeGreaterThanOrEqual(150);
   });
 });
@@ -94,7 +80,23 @@ describe("transit hubs", () => {
     const a: Place = { id: "node/10", name: "Lonsdale Quay", kind: "transit", type: "ferry_terminal", lat: 49.3095, lon: -123.0828, capacity: 600, capacitySource: "estimate" };
     const b: Place = { ...a, id: "node/11", name: "", type: "station", capacity: 300, lat: 49.3098 };
     const match = { name: "FIFA World Cup: Canada vs Qatar", venue: "BC Place", lat: 49.2768, lon: -123.1119, start: "2026-06-18T15:00:00-07:00", durationH: 2, attendance: 54000, sport: true, source: { title: "BC Place", url: "https://www.bcplace.com/" } };
-    const r = buildReport({ places: [a, b], at: new Date("2026-06-18T13:45:00-07:00"), regional: [match], mode: "snapshot" });
+    const r = buildReport({ places: [a, b], at: new Date("2026-06-18T13:45:00-07:00"), regional: [match] });
     expect(r.hotspots.filter((h) => h.why.includes("heading to"))).toHaveLength(1);
+  });
+});
+
+describe("stadiums", () => {
+  it("an empty stadium is not a hotspot without an event", () => {
+    const bcPlace: Place = { id: "way/1", name: "BC Place", kind: "venue", type: "stadium", lat: 49.2768, lon: -123.1119, capacity: 54500, capacitySource: "osm" };
+    expect(buildReport({ places: [bcPlace], at: SATURDAY_1030 }).hotspots).toHaveLength(0);
+  });
+});
+
+describe("events inside the map", () => {
+  it("a scheduled game fills the stadium", () => {
+    const bcPlace: Place = { id: "way/1", name: "BC Place", kind: "venue", type: "stadium", lat: 49.2768, lon: -123.1119, capacity: 54500, capacitySource: "osm" };
+    const game = { name: "BC Lions vs Calgary", venue: "BC Place", lat: 49.2767, lon: -123.112, start: "2026-10-03T19:00:00-07:00", durationH: 3, attendance: 30000, sport: true, source: { title: "Schedule", url: "https://example.org" } };
+    const r = buildReport({ places: [bcPlace], at: new Date("2026-10-03T20:00:00-07:00"), regional: [game] });
+    expect(r.hotspots[0]).toMatchObject({ name: "BC Place", people: 30000 });
   });
 });

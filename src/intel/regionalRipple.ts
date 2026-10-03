@@ -1,6 +1,6 @@
-// How a big event elsewhere in the region (a FIFA match at BC Place, a concert at Rogers Arena)
-// changes crowds inside the map: fans pass through transit hubs before and after, and people
-// gather at local pubs and restaurants to watch sports.
+// How a big scheduled event (a concert at Rogers Arena, a game at BC Place) changes crowds in the
+// map: the venue itself fills up if it is inside the map, fans pass through transit hubs before
+// and after, and people gather at local pubs and restaurants to watch sports.
 
 import type { IntelSource, Place, RegionalEvent } from "./types";
 
@@ -10,6 +10,8 @@ const TRANSIT_SHARE = 0.015; // share of attendance present at a North Shore hub
 const WATCH_PARTY_LEVEL = 0.6; // pubs/restaurants at least this full during a big sports broadcast
 const HOME_TEAM_LEVEL = 0.85; // ...and fuller when Canada plays
 const MIN_ATTENDANCE = 5000;
+const AT_VENUE_DEG = 0.003; // ~300 m: a place this close to the event location is the venue
+const ARRIVED_SHARE = 0.4; // share of the crowd already inside during the arrival window
 
 export interface RippleEffect {
   extraPeople: number; // added on top of the normal estimate
@@ -44,7 +46,12 @@ export function rippleFor(place: Place, active: ReturnType<typeof activeRegional
   let source: IntelSource | null = null;
   for (const { event, phase } of active) {
     const label = `${event.name} at ${event.venue} (~${event.attendance.toLocaleString()})`;
-    if (place.kind === "transit" && phase !== "during") {
+    const atVenue = Math.hypot(place.lat - event.lat, place.lon - event.lon) < AT_VENUE_DEG && place.kind === "venue";
+    if (atVenue && phase !== "departure") {
+      floor = Math.max(floor, event.attendance * (phase === "during" ? 1 : ARRIVED_SHARE));
+      reasons.push(`${event.name} ${phase === "during" ? "in progress" : "starting soon"}`);
+      source ??= event.source;
+    } else if (place.kind === "transit" && phase !== "during") {
       extra += event.attendance * TRANSIT_SHARE;
       reasons.push(`fans ${phase === "arrival" ? "heading to" : "returning from"} ${label}`);
       source ??= event.source;

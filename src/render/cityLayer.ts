@@ -2,10 +2,12 @@ import * as THREE from "three";
 import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { MapJSON, SimState, World } from "../types";
 import { SCENE } from "./palette";
+import { QUALITY } from "./quality";
 
 const WATER = 0;
 const PARK = 3;
 const SEARCHED = 0.8;
+const MAX_TREES = 2500;
 
 /** World units: 1 unit = 1 grid cell horizontally; heights use the same metres-per-unit (true scale). */
 export class CityLayer {
@@ -246,10 +248,15 @@ export class CityLayer {
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
-        if (terrain[i] !== PARK || buildingHeight[i] > 0 || rand() > 0.45)
+        if (terrain[i] !== PARK || buildingHeight[i] > 0 || rand() > QUALITY.treeDensity)
           continue;
         spots.push([x + 0.2 + rand() * 0.6, y + 0.2 + rand() * 0.6]);
       }
+    }
+    // Dense forests (e.g. Green Timbers in Surrey) are thinned to keep phones smooth.
+    if (spots.length > MAX_TREES) {
+      const keep = MAX_TREES / spots.length;
+      spots.splice(0, spots.length, ...spots.filter(() => rand() < keep));
     }
     const geo = new THREE.IcosahedronGeometry(0.55, 0);
     geo.translate(0, 0.75, 0);

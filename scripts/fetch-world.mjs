@@ -1,20 +1,50 @@
-// Builds public/world.json (10 m simulation grid) and public/map.json (vector footprints/roads for rendering)
-// for Lower & Central Lonsdale, North Vancouver, from OSM (Overpass) + AWS Terrarium DEM tiles.
-// Usage: npm run data   (raw responses are cached in scripts/.cache)
+// Builds one playable area: public/areas/<id>/world.json (10 m simulation grid) and map.json
+// (vector footprints/roads for rendering), from OSM (Overpass) + AWS Terrarium DEM tiles.
+// Usage:
+//   npm run data                                    (Lonsdale, the default area)
+//   node scripts/fetch-world.mjs --id metrotown --name "Metrotown, Burnaby" --center 49.2266,-123.0035
+// Options: --center lat,lon [--size-km 2.5x2.1] | --bbox S,W,N,E   --base lat,lon (truck staging)
+// Raw responses are cached in scripts/.cache.
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { parseArgs } from "node:util";
 import { PNG } from "pngjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CACHE = path.join(here, ".cache");
-const OUT = path.join(here, "..", "public", "world.json");
-const OUT_MAP = path.join(here, "..", "public", "map.json");
-fs.mkdirSync(CACHE, { recursive: true });
-fs.mkdirSync(path.dirname(OUT), { recursive: true });
 
-const [S, W, N, E] = [49.308, -123.095, 49.327, -123.06];
+const { values: args } = parseArgs({
+  options: {
+    id: { type: "string", default: "lonsdale" },
+    name: { type: "string", default: "Lonsdale, North Vancouver" },
+    bbox: { type: "string" },
+    center: { type: "string" },
+    "size-km": { type: "string", default: "2.5x2.1" },
+    base: { type: "string", default: "49.3112,-123.0848" }, // Waterfront Park by Lonsdale Quay
+  },
+});
+const nums = (v) => v.split(",").map(Number);
+
+/** Bounding box from --bbox, or a --center plus a --size-km rectangle. */
+function areaBbox() {
+  if (args.bbox) return nums(args.bbox);
+  if (!args.center) return [49.308, -123.095, 49.327, -123.06]; // Lonsdale
+  const [lat, lon] = nums(args.center);
+  const [wKm, hKm] = args["size-km"].split("x").map(Number);
+  const dLat = hKm / 2 / 111.2;
+  const dLon = wKm / 2 / (111.32 * Math.cos((lat * Math.PI) / 180));
+  return [lat - dLat, lon - dLon, lat + dLat, lon + dLon].map((v) => Math.round(v * 1e5) / 1e5);
+}
+
+const OUT_DIR = path.join(here, "..", "public", "areas", args.id);
+const OUT = path.join(OUT_DIR, "world.json");
+const OUT_MAP = path.join(OUT_DIR, "map.json");
+fs.mkdirSync(CACHE, { recursive: true });
+fs.mkdirSync(OUT_DIR, { recursive: true });
+
+const [S, W, N, E] = areaBbox();
 const CELL = 10;
 const LAT0 = ((S + N) / 2) * (Math.PI / 180);
 const M_PER_DEG_LAT =
@@ -553,9 +583,10 @@ async function main() {
     if (terrain[i] === T.Park) population[i] += 0.003;
   }
 
-  // Base: nearest Ground/Park cell to Waterfront Park by Lonsdale Quay
-  const tx = Math.floor(toX(-123.0848)),
-    ty = Math.floor(toY(49.3112));
+  // Truck staging: nearest Ground/Park cell to --base (or the area centre when --center is given).
+  const [baseLat, baseLon] = args.center && args.base === "49.3112,-123.0848" ? nums(args.center) : nums(args.base);
+  const tx = Math.floor(toX(baseLon)),
+    ty = Math.floor(toY(baseLat));
   let base = { x: tx, y: ty },
     best = Infinity;
   for (let y = 0; y < HEIGHT; y++)
@@ -572,7 +603,7 @@ async function main() {
   const round = (a, p) => Array.from(a, (v) => Math.round(v * p) / p);
   const json = {
     meta: {
-      name: "Lonsdale, North Vancouver, BC",
+      name: args.name,
       bbox: [S, W, N, E],
       cellSizeM: CELL,
       width: WIDTH,

@@ -11,7 +11,8 @@
     "data": "node scripts/fetch-world.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "intel:places": "node scripts/fetch-places.ts"
+    "intel:places": "node scripts/fetch-places.ts",
+    "area": "node scripts/build-area.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

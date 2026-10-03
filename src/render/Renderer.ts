@@ -6,6 +6,7 @@ import { ActorLayer } from "./actors";
 import { CityLayer } from "./cityLayer";
 import { DroneCam } from "./droneCam";
 import { SCENE } from "./palette";
+import { QUALITY } from "./quality";
 
 export interface RenderOptions {
   showPaths: boolean;
@@ -43,10 +44,12 @@ export class Renderer {
     map: MapJSON | null,
   ) {
     const { width: W, height: H } = world.meta;
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer = new THREE.WebGLRenderer({ antialias: QUALITY.antialias });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, QUALITY.maxPixelRatio));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // The city never moves, so its shadows are rendered once (see the end of the constructor).
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.type = QUALITY.softShadows ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
     container.appendChild(this.renderer.domElement);
 
     this.labelRenderer = new CSS2DRenderer();
@@ -72,7 +75,7 @@ export class Renderer {
     this.sun = new THREE.DirectionalLight(0xffffff, 1.6);
     this.sun.position.set(-120, 180, 80);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(4096, 4096);
+    this.sun.shadow.mapSize.set(QUALITY.shadowMapSize, QUALITY.shadowMapSize);
     const sc = this.sun.shadow.camera;
     sc.left = -W / 2 - 10;
     sc.right = W / 2 + 10;
@@ -89,6 +92,8 @@ export class Renderer {
     this.offset = this.city.group.position.clone();
     this.actors = new ActorLayer(this.city, this.offset);
     this.scene.add(this.actors.group);
+
+    this.renderer.shadowMap.needsUpdate = true;
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(container);

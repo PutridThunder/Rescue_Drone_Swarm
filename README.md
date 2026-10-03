@@ -15,7 +15,7 @@ npm test         # simulation unit tests
 npm run build    # static production build in dist/
 ```
 
-`public/world.json` is checked in. To regenerate it from OpenStreetMap and elevation data, run `npm run data`.
+Area data is checked in under `public/areas/`. To rebuild an area from OpenStreetMap and elevation data, run `npm run area` (see Areas).
 Its per-cell arrays stay flat, with one grid row per line to make the map data easier to inspect.
 
 ## How it works
@@ -32,29 +32,35 @@ OBSERVE → UPDATE SHARED KNOWLEDGE → FIND FRONTIERS → SCORE SECTORS → ALL
 - **Resilience:** battery limits and recharging; disabling a drone releases its sector to the rest of the fleet.
 - **Tsunami scenario:** low-lying coastal cells flood at impact, and survivors not yet found there are lost. With disaster info enabled, the fleet prioritizes the flood zone.
 
+## Areas
+
+Pick an area from the header (click the area name under the title):
+
+| Area | id |
+|---|---|
+| Lonsdale, North Vancouver | `lonsdale` |
+| Downtown, Vancouver (BC Place, Rogers Arena) | `downtown` |
+| Metrotown, Burnaby | `metrotown` |
+| City Centre, Surrey | `surrey-centre` |
+
+Each area is a 2.5 × 2.1 km, 10 m grid in `public/areas/<id>/` (`world.json`, `map.json`, `places.json`), listed in `public/areas/index.json`. Areas are bundled, so they work offline.
+
+To add an area (needs internet once, to download OpenStreetMap and elevation data):
+
+```bash
+npm run area -- --id kitsilano --name "Kitsilano, Vancouver" --center 49.2684,-123.1683
+```
+
+You can also type a place name under **Import an area** in the app while running `npm run dev`. Tsunami is disabled for areas without a coastline.
+
 ## Crowd intel
 
-Predicts where people are at the moment the disaster strikes, so drones search those places first. Turn on **Crowd intel** under "What the drones know", pick a disaster time, and optionally press **Search online**.
+Predicts where people are at the moment the disaster strikes, so drones search those places first. Turn on **Crowd intel** under "What the drones know" and pick a disaster time. Everything runs offline in the browser, with no web search or online APIs:
 
-It works in two layers, using free data only:
-
-1. **Offline (bundled, instant, no network):**
-   - `public/intel/places.json`: 234 gathering places in the map from OpenStreetMap (schools, SeaBus, hospital, markets, venues, restaurants) with estimated capacities. Refresh with `npm run intel:places`.
-   - `public/intel/regional-events.json`: big upcoming events outside the map whose crowds ripple in (fans pass through Lonsdale Quay; pubs fill for sports watch parties). Empty by default; with a Ticketmaster key, events at BC Place, Rogers Arena and the PNE are found live.
-   - `src/intel/occupancy.ts`: how full each kind of place is by day of week and hour.
-2. **Online (dev server, `POST /api/intel`):** adds live signals. Social posts that mention a place raise its estimate and confidence; scheduled events become hotspots.
-
-| Source | Key | Status |
-|---|---|---|
-| OpenStreetMap | none | always on |
-| Mastodon hashtags | none | always on |
-| Ticketmaster | free, `TICKETMASTER_API_KEY` | optional |
-| Reddit | free app, `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | optional |
-| Bluesky | free app password, `BLUESKY_HANDLE` / `BLUESKY_APP_PASSWORD` | optional |
-
-Copy `.env.example` to `.env.local` and fill in the keys you have, then restart `npm run dev`. Keys stay on the server and are never sent to the browser. X is not supported because reading or searching posts requires a paid X API plan.
-
-To add a source, write `server/intel/sources/<name>.ts` exporting `(ctx) => Promise<SourceResult>` and add it to `SOURCES` in `server/intel/onlineSearch.ts`.
+- `public/areas/<id>/places.json`: gathering places from OpenStreetMap (schools, transit, hospitals, markets, venues, restaurants) with estimated capacities. Refresh with `npm run intel:places -- --id <id>`.
+- `src/intel/occupancy.ts`: how full each kind of place is by day of week and hour (schools in session, commute peaks, dinner rush). Stadiums are empty unless an event is scheduled.
+- `public/intel/regional-events.json`: upcoming big events (add them by hand). The venue fills if it is in the map, fans pass through transit hubs before and after, and pubs fill for sports.
+- `src/intel/buildReport.ts`: combines these into ranked hotspots with reasons and OpenStreetMap links.
 
 ## Project layout
 
@@ -63,10 +69,11 @@ src/types.ts          shared contracts between layers
 src/sim/              simulation and autonomy engine (pure TypeScript, tested)
 src/world/            world loading and procedural fallback
 src/render/           three.js renderer and HUD (UI.ts, IntelPanel.ts, ...)
-src/intel/            crowd intel: occupancy model, report builder, browser client (tested)
-server/intel/         online crowd intel: OSM places + one file per free web source
-scripts/              data pipelines (map, elevation, places)
-public/               bundled data: world.json, map.json, intel/
+src/intel/            crowd intel: occupancy model, report builder (offline, tested)
+server/areas/         dev-server endpoint for importing a new area by place name
+scripts/              data pipelines (map, elevation, places, build-area)
+public/areas/         bundled areas: <id>/world.json, map.json, places.json
+public/intel/         regional-events.json
 ```
 
 Map data © OpenStreetMap contributors (ODbL).

@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { droneColorCss } from "./palette";
 import type { RenderOptions } from "./Renderer";
+import { QUALITY } from "./quality";
 import "./style.css";
 
 export type Tool = "move" | "survivor" | "crowd" | "erase" | "fail";
@@ -145,6 +146,18 @@ export class UI {
   // Public API
   // ---------------------------------------------------------------------------
 
+  /** Tsunami needs a coastline; inland areas get the scenario disabled. */
+  setTsunamiAvailable(available: boolean) {
+    const b = this.q<HTMLButtonElement>('[data-scenario="tsunami"]');
+    b.disabled = !available;
+    b.title = available ? "" : "No coastline in this area";
+  }
+
+  /** Area name button in the header; main.ts attaches the area picker to it. */
+  get areaButton(): HTMLElement {
+    return this.q("#area-btn");
+  }
+
   /** Container where main.ts mounts the crowd intel panel. */
   get intelSlot(): HTMLElement {
     return this.q("#intel-slot");
@@ -277,7 +290,7 @@ export class UI {
     return `
       <header class="brand card">
         <div class="logo">${svg("fail", 16)}</div>
-        <div><h1>Rescue Drone Swarm</h1><p>Lonsdale · North Vancouver</p></div>
+        <div><h1>Rescue Drone Swarm</h1><button class="area-btn" id="area-btn" title="Change area"><span data-area-name></span> ▾</button></div>
       </header>
 
       <div class="transport card">
@@ -301,7 +314,7 @@ export class UI {
           ${this.toggle("geography", "Street map", "Buildings and streets known in advance")}
           ${this.toggle("population", "Population", "Where people live, plus crowds you report")}
           ${this.toggle("disaster", "Hazard warning", "Tsunami flood zone and countdown")}
-          ${this.toggle("crowds", "Crowd intel", "Events, busy places and social media")}
+          ${this.toggle("crowds", "Crowd intel", "Busy places and scheduled events")}
         </section>
         <div id="intel-slot"></div>
         <section>
@@ -362,7 +375,7 @@ export class UI {
           ${this.view("showSensors", "Camera view", true)}
           ${this.view("showLabels", "Street names", true)}
           ${this.view("revealHidden", "Reveal hidden survivors", false)}
-          ${this.view("showDroneCam", "Drone cam", true)}
+          ${this.view("showDroneCam", "Drone cam", QUALITY.droneCamByDefault)}
         </div>
       </div>
 
@@ -386,7 +399,13 @@ export class UI {
           </div>
         </div>
       </div>
-      <div class="toast" id="toast"></div>`;
+      <div class="toast" id="toast"></div>
+
+      <nav class="mobile-tabs" id="mobile-tabs">
+        <button data-sheet="" class="on">Map</button>
+        <button data-sheet="setup">Setup</button>
+        <button data-sheet="live">Live</button>
+      </nav>`;
   }
 
   private toggle(key: keyof InfoModes, label: string, desc: string): string {
@@ -407,7 +426,19 @@ export class UI {
     return `<label class="check"><input type="checkbox" data-view="${key}" ${on ? "checked" : ""}>${label}</label>`;
   }
 
+  /** Phones: the side panels become bottom sheets chosen from a tab bar. */
+  private bindMobileTabs() {
+    const tabs = this.q("#mobile-tabs");
+    tabs.addEventListener("click", (e) => {
+      const b = (e.target as HTMLElement).closest<HTMLButtonElement>("button");
+      if (!b) return;
+      document.body.dataset.sheet = b.dataset.sheet ?? "";
+      tabs.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    });
+  }
+
   private bind() {
+    this.bindMobileTabs();
     this.q("#play").addEventListener("click", () => this.cb.onStartPause());
     this.q("#reset").addEventListener("click", () => this.cb.onReset());
     this.q("#r-again").addEventListener("click", () => this.cb.onReset());

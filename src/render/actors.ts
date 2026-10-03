@@ -45,7 +45,6 @@ class DroneActor {
       new THREE.BoxGeometry(0.9, 0.28, 0.9),
       this.body,
     );
-    hull.castShadow = true;
     this.craft.add(hull);
     const canopy = new THREE.Mesh(
       new THREE.SphereGeometry(0.32, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -209,13 +208,11 @@ class TruckActor {
       lambert(SCENE.truckBody),
     );
     body.position.set(-0.15, 0.25, 0);
-    body.castShadow = true;
     const cab = new THREE.Mesh(
       new THREE.BoxGeometry(0.42, 0.34, 0.68),
       lambert(SCENE.truckCab),
     );
     cab.position.set(0.78, 0.23, 0);
-    cab.castShadow = true;
     const stripe = new THREE.Mesh(
       new THREE.BoxGeometry(1.52, 0.07, 0.74),
       lambert(SCENE.truckAccent),
@@ -460,6 +457,11 @@ export class ActorLayer {
     );
     for (const m of this.survivors.values()) m.update(ctx, t);
     this.syncList(state.crowds, this.crowds, (c) => new CrowdMarker(c, ctx));
+    // Predicted crowds only show while the fleet is using crowd intel.
+    for (const [c, m] of this.crowds) {
+      const visible = c.source === "user" || state.config.info.crowds;
+      m.group.traverse((o) => (o.visible = visible)); // includes the HTML label
+    }
   }
 
   /** World-space position of a drone (for camera follow). */

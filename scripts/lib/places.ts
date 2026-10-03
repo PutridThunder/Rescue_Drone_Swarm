@@ -1,4 +1,5 @@
-// Places where people gather, from OpenStreetMap (free, no key), with an estimated full capacity.
+// Build-time only: places where people gather, from OpenStreetMap, with an estimated full capacity.
+// Used by scripts/fetch-places.ts to write the bundled public/areas/<id>/places.json.
 import fs from "node:fs";
 import path from "node:path";
 import type { HotspotKind, Place } from "../../src/intel/types";
@@ -98,9 +99,19 @@ function classify(tags: Record<string, string>): string | null {
   return null;
 }
 
+// Big venues whose OSM entry has no capacity tag.
+const KNOWN_CAPACITY: [RegExp, number][] = [
+  [/^rogers arena$/i, 18900],
+  [/^pacific coliseum$/i, 16000],
+  [/^queen elizabeth theatre$/i, 2800],
+  [/^orpheum$/i, 2700],
+];
+
 function capacityFor(type: string, tags: Record<string, string>): [number, Place["capacitySource"]] {
   const tagged = parseInt(tags.capacity ?? "", 10);
   if (tagged > 0) return [tagged, "osm"];
+  const known = KNOWN_CAPACITY.find(([re]) => re.test(tags.name ?? ""));
+  if (known) return [known[1], "estimate"];
   let cap = TYPES[type][1];
   const name = (tags.name ?? "").toLowerCase();
   if (type === "school") {

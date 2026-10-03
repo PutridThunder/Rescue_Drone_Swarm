@@ -888,3 +888,83 @@ input[type="range"] {
 .dronecam .crosshair::before, .dronecam .crosshair::after { content: ''; position: absolute; background: rgba(255, 255, 255, 0.8); }
 .dronecam .crosshair::before { left: 50%; top: -8px; bottom: -8px; width: 1.5px; transform: translateX(-50%); }
 .dronecam .crosshair::after { top: 50%; left: -8px; right: -8px; height: 1.5px; transform: translateY(-50%); }
+
+/* Area picker */
+.brand { position: absolute; }
+.area-btn { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; color: var(--accent); cursor: pointer; font-weight: 600; }
+.area-menu { position: absolute; top: calc(100% + 8px); left: 0; width: 100%; padding: 12px 14px; z-index: 20; }
+.area-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.area-list button { text-align: left; border: 0; background: none; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+.area-list button:hover { background: #f6f8fb; }
+.area-list button.on { background: var(--accent-soft); color: var(--accent); }
+.area-import { display: flex; gap: 6px; }
+.area-import input { flex: 1; min-width: 0; font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.area-status { font-size: 12px; color: var(--muted); margin-top: 8px; min-height: 1em; }
+
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ------------------------------------------------------------------ */
+/* Phones: map first, panels as bottom sheets, compact controls       */
+/* ------------------------------------------------------------------ */
+.mobile-tabs { display: none; }
+
+@media (max-width: 760px) {
+  .hud { font-size: 13px; }
+  .brand { top: calc(8px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto; padding: 8px 10px 8px 8px; }
+  .brand h1 { font-size: 13px; }
+  .transport { top: calc(64px + env(safe-area-inset-top)); left: 8px; right: 8px; transform: none; justify-content: space-between; padding: 4px; }
+  .transport .btn.primary { min-width: 0; flex: 1; }
+  .transport .seg button { padding: 0 7px; }
+  .clock { padding: 0 4px; }
+  .chip { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
+
+  /* Side panels become bottom sheets above the tab bar. */
+  .panel.left, .panel.right {
+    display: none;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    width: auto;
+    max-height: 62vh;
+    border-radius: 16px 16px 0 0;
+    overflow-y: auto;
+    z-index: 15;
+    animation: sheet-up 0.22s ease-out;
+  }
+  body[data-sheet='setup'] .panel.left,
+  body[data-sheet='live'] .panel.right { display: flex; }
+  .right .grow { min-height: 200px; }
+  @keyframes sheet-up { from { transform: translateY(24px); } }
+
+  .legend { display: none; }
+  .hint { display: none; }
+
+  .toolbar { bottom: calc(64px + env(safe-area-inset-bottom)); left: 8px; right: 8px; transform: none; justify-content: space-between; padding: 4px; }
+  .tool { width: auto; flex: 1; padding: 6px 2px; font-size: 10px; }
+  body[data-sheet='setup'] .toolbar,
+  body[data-sheet='live'] .toolbar { display: none; }
+
+  .mobile-tabs {
+    display: flex;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    gap: 6px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    z-index: 16;
+  }
+  .mobile-tabs button { flex: 1; height: 40px; border: 0; border-radius: 10px; background: transparent; font-weight: 700; color: var(--muted); }
+  .mobile-tabs button.on { background: var(--accent-soft); color: var(--accent); }
+
+  .dronecam { top: calc(112px + env(safe-area-inset-top)); right: 8px; width: 46vw; height: 28vw; min-height: 110px; }
+  .dronecam .tele, .dronecam #cam-target { display: none; }
+  .place { left: 8px !important; right: 8px; width: auto; top: auto !important; bottom: calc(130px + env(safe-area-inset-bottom)); }
+  .modal .card { width: calc(100vw - 32px); padding: 18px; }
+  .r-grid { grid-template-columns: repeat(2, 1fr); }
+  .area-menu { left: 0; right: 0; }
+  .street-label { font-size: 10px; }
+}

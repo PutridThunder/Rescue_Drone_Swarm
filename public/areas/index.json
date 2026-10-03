@@ -1,0 +1,44 @@
+{
+  "areas": [
+    {
+      "id": "lonsdale",
+      "name": "Lonsdale, North Vancouver",
+      "bbox": [
+        49.308,
+        -123.095,
+        49.327,
+        -123.06
+      ]
+    },
+    {
+      "id": "downtown",
+      "name": "Downtown, Vancouver",
+      "bbox": [
+        49.27106,
+        -123.13571,
+        49.28994,
+        -123.10129
+      ]
+    },
+    {
+      "id": "metrotown",
+      "name": "Metrotown, Burnaby",
+      "bbox": [
+        49.21716,
+        -123.02069,
+        49.23604,
+        -122.98631
+      ]
+    },
+    {
+      "id": "surrey-centre",
+      "name": "City Centre, Surrey",
+      "bbox": [
+        49.17956,
+        -122.86618,
+        49.19844,
+        -122.83182
+      ]
+    }
+  ]
+}

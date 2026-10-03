@@ -14,7 +14,7 @@ export type HotspotKind =
   | "community"
   | "other";
 
-/** A gathering place from OpenStreetMap (offline layer, public/intel/places.json). */
+/** A gathering place from OpenStreetMap (offline layer, public/areas/<id>/places.json). */
 export interface Place {
   id: string; // OSM id, e.g. "node/123"
   name: string;
@@ -24,19 +24,6 @@ export interface Place {
   lon: number;
   capacity: number; // people at full occupancy
   capacitySource: "osm" | "estimate";
-}
-
-/** Something found online: a social-media post or a scheduled event. */
-export interface Signal {
-  source: string; // "Mastodon", "Ticketmaster", "Reddit", "Bluesky"
-  type: "post" | "event";
-  title: string;
-  url: string;
-  text: string;
-  time?: string; // ISO
-  lat?: number; // events only
-  lon?: number;
-  people?: number; // events only: expected attendance
 }
 
 /** A big event outside the map (e.g. a FIFA match at BC Place) whose crowds ripple into it. */
@@ -81,10 +68,4 @@ export interface IntelReport {
   summary: string;
   hotspots: Hotspot[];
   steps: IntelStep[];
-  mode: "offline" | "live" | "snapshot"; // offline = bundled data only; live = with online search
-}
-
-export interface IntelRequest {
-  at: string; // ISO timestamp
-  bbox: [number, number, number, number]; // south, west, north, east
 }

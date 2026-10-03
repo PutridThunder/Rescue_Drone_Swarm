@@ -1,11 +1,10 @@
-// "Crowd intel" section of the left panel: pick the disaster time, run the online search,
-// and see where people are predicted to be (with reasons and sources).
+// "Crowd intel" section of the left panel: pick the disaster time and see where people are
+// predicted to be (with reasons and sources). Fully offline.
 
 import type { IntelReport, RegionalEvent } from "../intel/types";
 
 export interface IntelPanelCallbacks {
   onTimeChange(at: Date): void;
-  onSearchOnline(): void;
 }
 
 const LIST_SIZE = 6;
@@ -34,10 +33,6 @@ export class IntelPanel {
           .map((ev) => `<button data-at="${new Date(Date.parse(ev.start) - ARRIVAL_PEAK_MIN * 60_000).toISOString()}" title="${escapeHtml(ev.name)} at ${escapeHtml(ev.venue)}">${escapeHtml(shortName(ev.name))}</button>`)
           .join("")}
       </div>
-      <div class="row">
-        <button class="btn small primary" id="intel-online">Search online</button>
-        <span class="status" id="intel-status"></span>
-      </div>
       <p class="summary" id="intel-summary"></p>
       <ul class="steps" id="intel-steps"></ul>
       <ol class="hotspots" id="intel-list"></ol>`;
@@ -55,26 +50,13 @@ export class IntelPanel {
       this.setTime(at);
       this.cb.onTimeChange(at);
     });
-    this.q("#intel-online").addEventListener("click", () => this.cb.onSearchOnline());
   }
 
   setTime(at: Date) {
     this.q<HTMLInputElement>("#intel-at").value = toLocalInput(at);
   }
 
-  setBusy(message: string) {
-    this.q<HTMLButtonElement>("#intel-online").disabled = true;
-    this.q("#intel-status").textContent = message;
-  }
-
-  setError(message: string) {
-    this.q<HTMLButtonElement>("#intel-online").disabled = false;
-    this.q("#intel-status").textContent = message;
-  }
-
   setReport(report: IntelReport) {
-    this.q<HTMLButtonElement>("#intel-online").disabled = false;
-    this.q("#intel-status").textContent = report.mode === "live" ? "Live results" : "Offline data";
     this.q("#intel-summary").textContent = report.summary;
     this.q("#intel-steps").innerHTML = report.steps
       .map((s) => `<li class="${s.status}"><b>${escapeHtml(s.source)}</b> ${escapeHtml(s.detail)}</li>`)

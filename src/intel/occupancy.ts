@@ -35,6 +35,8 @@ const PROFILES: Record<string, Profile> = {
   worship: { weekday: [[18, 20, 0.15]], weekend: [[9, 13, 0.85], [17, 19, 0.3]], label: "services" },
   community: { weekday: [[9, 21, 0.6]], weekend: [[9, 18, 0.7]], label: "programs and classes" },
   park: { weekday: [[7, 10, 0.25], [10, 16, 0.4], [16, 20, 0.6]], weekend: [[9, 19, 0.85]], label: "park visitors" },
+  // Stadiums are empty unless an event is on; scheduled events come from public/intel/regional-events.json.
+  stadium: { weekday: [[9, 17, 0.0004]], weekend: [[9, 17, 0.0004]], label: "no event scheduled" }, // skeleton staff
   hotel: { weekday: [[0, 8, 0.85], [8, 17, 0.35], [17, 24, 0.7]], weekend: [[0, 10, 0.9], [10, 17, 0.45], [17, 24, 0.8]], label: "hotel guests" },
 };
 
@@ -45,6 +47,7 @@ const TYPE_PROFILE: Record<string, string> = {
   kindergarten: "kindergarten",
   hospital: "hospital",
   clinic: "clinic",
+  stadium: "stadium",
   nightclub: "nightlife",
   pub: "nightlife",
   bar: "nightlife",

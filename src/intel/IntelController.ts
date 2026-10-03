@@ -1,9 +1,9 @@
-// Runs the crowd intel flow: offline report first (instant), online search on request.
-// Hands the resulting crowds to the app through `onCrowds`.
+// Runs the crowd intel flow (fully offline): recompute hotspots whenever the disaster time changes
+// and hand the resulting crowds to the app through `onCrowds`.
 
 import { IntelPanel } from "../render/IntelPanel";
 import type { World } from "../types";
-import { loadOfflineIntel, offlineReport, searchOnline, type OfflineIntel } from "./client";
+import { loadOfflineIntel, offlineReport, type OfflineIntel } from "./client";
 import { hotspotsToCrowds, type CrowdPlacement } from "./toCrowds";
 import type { IntelReport } from "./types";
 
@@ -18,12 +18,16 @@ export class IntelController {
     private readonly onCrowds: (crowds: CrowdPlacement[], report: IntelReport) => void,
   ) {}
 
-  static async create(world: World, mount: HTMLElement, onCrowds: (crowds: CrowdPlacement[], report: IntelReport) => void): Promise<IntelController> {
-    const data = await loadOfflineIntel();
+  static async create(
+    areaId: string,
+    world: World,
+    mount: HTMLElement,
+    onCrowds: (crowds: CrowdPlacement[], report: IntelReport) => void,
+  ): Promise<IntelController> {
+    const data = await loadOfflineIntel(areaId);
     let controller: IntelController | null = null;
     const panel = new IntelPanel(mount, new Date(), data.regional, {
       onTimeChange: (at) => controller?.setTime(at),
-      onSearchOnline: () => controller?.searchOnline(),
     });
     controller = new IntelController(world, data, panel, onCrowds);
     controller.publish(offlineReport(data, controller.at));
@@ -34,15 +38,6 @@ export class IntelController {
   setTime(at: Date) {
     this.at = at;
     this.publish(offlineReport(this.data, at));
-  }
-
-  async searchOnline() {
-    this.panel.setBusy("Searching OpenStreetMap, events and social media…");
-    try {
-      this.publish(await searchOnline(this.at, this.world.meta.bbox));
-    } catch (err) {
-      this.panel.setError(`Online search unavailable (${(err as Error).message}) — using offline data`);
-    }
   }
 
   get current(): IntelReport | null {
