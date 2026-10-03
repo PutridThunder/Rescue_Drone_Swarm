@@ -1,9 +1,9 @@
-import type { TruckStatus, TruckView } from '../types';
+import type { TruckStatus, TruckView } from "../types";
 
 /** Ground charging vehicle: drives on roads, launches and recharges drones. */
 export class Truck implements TruckView {
   heading = 0;
-  status: TruckStatus = 'PARKED';
+  status: TruckStatus = "PARKED";
   path: { x: number; y: number }[] = [];
   /** Where the truck is heading (cell centre), for re-routing decisions. */
   goal: { x: number; y: number } | null = null;
@@ -34,7 +34,7 @@ export class Truck implements TruckView {
       if (step === dist) this.path.shift();
     }
     if (this.path.length === 0) {
-      this.status = 'PARKED';
+      this.status = "PARKED";
       this.goal = null;
     }
     return moved;

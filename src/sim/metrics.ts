@@ -1,6 +1,9 @@
-import type { Metrics } from '../types';
+import type { Metrics } from "../types";
 
-export function createMetrics(survivorsTotal: number, populationTotal: number): Metrics {
+export function createMetrics(
+  survivorsTotal: number,
+  populationTotal: number,
+): Metrics {
   return {
     time: 0,
     areaSearchedFrac: 0,
@@ -33,10 +36,12 @@ export class MetricsAccumulator {
 
   apply(m: Metrics, time: number, distance: number, capacity: number) {
     m.time = time;
-    m.areaSearchedFrac = this.searchableCells > 0 ? this.searchedCells / this.searchableCells : 1;
+    m.areaSearchedFrac =
+      this.searchableCells > 0 ? this.searchedCells / this.searchableCells : 1;
     m.populationReached = this.populationReached;
     m.redundancyFrac = this.visits > 0 ? this.redundantVisits / this.visits : 0;
-    m.droneUtilization = this.activeTime > 0 ? this.busyTime / this.activeTime : 0;
+    m.droneUtilization =
+      this.activeTime > 0 ? this.busyTime / this.activeTime : 0;
     m.distanceTravelled = distance;
     m.batteryConsumed = this.batteryCells / capacity;
   }

@@ -1,4 +1,4 @@
-import type { KnowledgeView } from '../types';
+import type { KnowledgeView } from "../types";
 
 /** Precomputed sensor footprint: offsets within a circle and per-observation detection gain. */
 export interface SensorDisc {
@@ -78,7 +78,12 @@ export class Knowledge {
     this.lastObsT = new Float32Array(size).fill(-1e9);
     this.lastObsDrone = new Int16Array(size).fill(-1);
     this.dirtyMark = new Uint8Array(size);
-    this.view = { known: this.known, searched: this.searched, frontier: this.frontier, hazard: null };
+    this.view = {
+      known: this.known,
+      searched: this.searched,
+      frontier: this.frontier,
+      hazard: null,
+    };
   }
 
   markDirty(i: number) {

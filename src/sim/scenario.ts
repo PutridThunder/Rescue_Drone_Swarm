@@ -1,5 +1,5 @@
-import type { InfoModes, SurvivorView, World } from '../types';
-import type { Rng } from './rng';
+import type { InfoModes, SurvivorView, World } from "../types";
+import type { Rng } from "./rng";
 
 const WATER = 0;
 const PARK = 3;
@@ -120,7 +120,15 @@ export function sampleSurvivors(
         const x = Math.floor(anchor.x) + rng.int(5) - 2;
         const y = Math.floor(anchor.y) + rng.int(5) - 2;
         const j = y * width + x;
-        if (x >= 0 && y >= 0 && x < width && y < height && world.terrain[j] !== WATER && (!allowed || allowed[j])) cell = j;
+        if (
+          x >= 0 &&
+          y >= 0 &&
+          x < width &&
+          y < height &&
+          world.terrain[j] !== WATER &&
+          (!allowed || allowed[j])
+        )
+          cell = j;
       }
     }
     if (cell < 0) cell = lowerBound(cum, rng.next() * acc);

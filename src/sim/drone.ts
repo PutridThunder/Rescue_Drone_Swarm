@@ -1,10 +1,10 @@
-import type { DroneStatus, DroneView } from '../types';
+import type { DroneStatus, DroneView } from "../types";
 
 export const TRAIL_MAX = 300;
 
 export class Drone implements DroneView {
   heading = 0;
-  status: DroneStatus = 'IDLE';
+  status: DroneStatus = "IDLE";
   battery = 1;
   path: { x: number; y: number }[] = [];
   trail: { x: number; y: number }[] = [];
@@ -31,7 +31,7 @@ export class Drone implements DroneView {
   }
 
   get active(): boolean {
-    return this.status !== 'DISABLED';
+    return this.status !== "DISABLED";
   }
 
   drain(cells: number) {

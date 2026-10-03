@@ -1,4 +1,4 @@
-import type { World } from '../types';
+import type { World } from "../types";
 
 /**
  * Synthetic coastal town for tests: sea along the south, a hill to the north,
@@ -22,7 +22,12 @@ export function makeTestWorld(width = 60, height = 50): World {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
       if (y >= seaY) continue; // water, elevation 0
-      const hill = 80 * Math.exp(-((x - width / 2) ** 2 + (y - height * 0.12) ** 2) / (2 * (width / 6) ** 2));
+      const hill =
+        80 *
+        Math.exp(
+          -((x - width / 2) ** 2 + (y - height * 0.12) ** 2) /
+            (2 * (width / 6) ** 2),
+        );
       elevation[i] = (seaY - y) * 1.2 + hill;
       if (hill > 30) terrain[i] = 3;
       else if (x % 8 === 0 || y % 8 === 0) terrain[i] = 2;
@@ -35,12 +40,21 @@ export function makeTestWorld(width = 60, height = 50): World {
         buildingHeight[i] = 80;
       }
       if (terrain[i] !== 3) {
-        for (const b of blobs) population[i] += b.p * Math.exp(-((x - b.x) ** 2 + (y - b.y) ** 2) / (2 * b.r ** 2));
+        for (const b of blobs)
+          population[i] +=
+            b.p * Math.exp(-((x - b.x) ** 2 + (y - b.y) ** 2) / (2 * b.r ** 2));
       }
     }
   }
   const world: World = {
-    meta: { name: 'test', bbox: [0, 0, 1, 1], cellSizeM: 30, width, height, source: 'procedural' },
+    meta: {
+      name: "test",
+      bbox: [0, 0, 1, 1],
+      cellSizeM: 30,
+      width,
+      height,
+      source: "procedural",
+    },
     terrain,
     elevation,
     buildingHeight,
@@ -85,6 +99,7 @@ export function coastDistance(world: World): Float32Array {
       }
     }
   }
-  for (let i = 0; i < n; i++) if (!Number.isFinite(dist[i])) dist[i] = width + height;
+  for (let i = 0; i < n; i++)
+    if (!Number.isFinite(dist[i])) dist[i] = width + height;
   return dist;
 }

@@ -92,7 +92,17 @@ export class AStar {
   ): number[] | null {
     const w = this.width;
     const h = this.height;
-    if (tx < 0 || ty < 0 || tx >= w || ty >= h || sx < 0 || sy < 0 || sx >= w || sy >= h) return null;
+    if (
+      tx < 0 ||
+      ty < 0 ||
+      tx >= w ||
+      ty >= h ||
+      sx < 0 ||
+      sy < 0 ||
+      sx >= w ||
+      sy >= h
+    )
+      return null;
     const start = sy * w + sx;
     const goal = ty * w + tx;
     if (blocked[goal]) return null;
@@ -176,8 +186,15 @@ export function lineOfSight(
 }
 
 /** String-pull a cell path into sparse waypoints (cell centres), excluding the start cell. */
-export function smoothPath(cells: number[], blocked: Uint8Array, width: number): { x: number; y: number }[] {
-  const pts = cells.map((c) => ({ x: (c % width) + 0.5, y: Math.floor(c / width) + 0.5 }));
+export function smoothPath(
+  cells: number[],
+  blocked: Uint8Array,
+  width: number,
+): { x: number; y: number }[] {
+  const pts = cells.map((c) => ({
+    x: (c % width) + 0.5,
+    y: Math.floor(c / width) + 0.5,
+  }));
   if (pts.length <= 1) return [];
   const out: { x: number; y: number }[] = [];
   let anchor = 0;

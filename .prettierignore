@@ -1,0 +1,4 @@
+node_modules
+dist
+scripts/.cache
+public/world.json

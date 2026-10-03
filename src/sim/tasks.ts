@@ -1,4 +1,4 @@
-import type { TaskView } from '../types';
+import type { TaskView } from "../types";
 
 export const SECTOR_SIZE = 10;
 export const SECTOR_DONE = 0.85;
@@ -21,7 +21,7 @@ export interface Sector {
 }
 
 export function sectorName(col: number, row: number): string {
-  let s = '';
+  let s = "";
   let c = col;
   do {
     s = String.fromCharCode(65 + (c % 26)) + s;
@@ -30,7 +30,11 @@ export function sectorName(col: number, row: number): string {
   return `${s}${row + 1}`;
 }
 
-export function buildSectors(width: number, height: number, size = SECTOR_SIZE): { sectors: Sector[]; cols: number } {
+export function buildSectors(
+  width: number,
+  height: number,
+  size = SECTOR_SIZE,
+): { sectors: Sector[]; cols: number } {
   const cols = Math.ceil(width / size);
   const rows = Math.ceil(height / size);
   const sectors: Sector[] = [];
@@ -54,14 +58,31 @@ export function buildSectors(width: number, height: number, size = SECTOR_SIZE):
         name: sectorName(col, row),
         exhausted: false,
         boost: 0,
-        view: { id, x0, y0, x1, y1, label: sectorName(col, row), priority: 0, breakdown: {}, assignedDrone: null, searchedFrac: 0, isFrontier: false },
+        view: {
+          id,
+          x0,
+          y0,
+          x1,
+          y1,
+          label: sectorName(col, row),
+          priority: 0,
+          breakdown: {},
+          assignedDrone: null,
+          searchedFrac: 0,
+          isFrontier: false,
+        },
       });
     }
   }
   return { sectors, cols };
 }
 
-export function sectorAt(x: number, y: number, cols: number, size = SECTOR_SIZE): number {
+export function sectorAt(
+  x: number,
+  y: number,
+  cols: number,
+  size = SECTOR_SIZE,
+): number {
   return Math.floor(y / size) * cols + Math.floor(x / size);
 }
 

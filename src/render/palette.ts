@@ -26,12 +26,15 @@ export const SCENE = {
 };
 
 // Distinct, saturated-but-friendly drone colours that read on a light map.
-export const DRONE_COLORS = [0x2f6fed, 0x10a37f, 0xe8590c, 0x9b51e0, 0xd6336c, 0x0c9fb8, 0x8a6d00, 0x4c6ef5, 0x2b8a3e, 0xc2255c, 0x5f3dc4, 0x1098ad];
+export const DRONE_COLORS = [
+  0x2f6fed, 0x10a37f, 0xe8590c, 0x9b51e0, 0xd6336c, 0x0c9fb8, 0x8a6d00,
+  0x4c6ef5, 0x2b8a3e, 0xc2255c, 0x5f3dc4, 0x1098ad,
+];
 
 export function droneColor(id: number): number {
   return DRONE_COLORS[(id - 1) % DRONE_COLORS.length];
 }
 
 export function droneColorCss(id: number): string {
-  return `#${droneColor(id).toString(16).padStart(6, '0')}`;
+  return `#${droneColor(id).toString(16).padStart(6, "0")}`;
 }

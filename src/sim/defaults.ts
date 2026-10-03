@@ -1,4 +1,4 @@
-import type { SimConfig, Weights } from '../types';
+import type { SimConfig, Weights } from "../types";
 
 export const DEFAULT_WEIGHTS: Weights = {
   population: 1.0,
@@ -19,8 +19,13 @@ export const DEFAULT_CONFIG: SimConfig = {
   batteryCapacity: 1500,
   speed: 6,
   survivorCount: 25,
-  info: { geography: true, population: false, elevation: false, disaster: false },
-  scenario: 'none',
+  info: {
+    geography: true,
+    population: false,
+    elevation: false,
+    disaster: false,
+  },
+  scenario: "none",
   tsunamiImpactTime: 60,
   tsunamiRunupM: 12,
   weights: DEFAULT_WEIGHTS,

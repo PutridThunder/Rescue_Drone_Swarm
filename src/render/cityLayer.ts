@@ -1,7 +1,7 @@
-import * as THREE from 'three';
-import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import type { MapJSON, SimState, World } from '../types';
-import { SCENE } from './palette';
+import * as THREE from "three";
+import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import type { MapJSON, SimState, World } from "../types";
+import { SCENE } from "./palette";
 
 const WATER = 0;
 const PARK = 3;
@@ -18,7 +18,8 @@ export class CityLayer {
   private readonly overlayTex: THREE.DataTexture;
   private buildingMesh: THREE.Mesh | null = null;
   private buildingColors: THREE.BufferAttribute | null = null;
-  private buildingRanges: { start: number; count: number; heightM: number }[] = [];
+  private buildingRanges: { start: number; count: number; heightM: number }[] =
+    [];
   private floodMask: Uint8Array | null = null;
   private buildingCells: Int32Array[] = [];
   private cellBuildings = new Map<number, number[]>();
@@ -44,7 +45,12 @@ export class CityLayer {
     this.pickables.push(terrain);
 
     this.overlayData = new Uint8Array(this.W * this.H * 4);
-    this.overlayTex = new THREE.DataTexture(this.overlayData, this.W, this.H, THREE.RGBAFormat);
+    this.overlayTex = new THREE.DataTexture(
+      this.overlayData,
+      this.W,
+      this.H,
+      THREE.RGBAFormat,
+    );
     this.overlayTex.magFilter = THREE.LinearFilter;
     this.overlayTex.minFilter = THREE.LinearFilter;
     this.overlayTex.flipY = false;
@@ -63,18 +69,24 @@ export class CityLayer {
     this.group.add(overlay);
 
     const water = new THREE.Mesh(
-      new THREE.PlaneGeometry(this.W, this.H).rotateX(-Math.PI / 2).translate(this.W / 2, -0.05, this.H / 2),
+      new THREE.PlaneGeometry(this.W, this.H)
+        .rotateX(-Math.PI / 2)
+        .translate(this.W / 2, -0.05, this.H / 2),
       new THREE.MeshLambertMaterial({ color: SCENE.water }),
     );
     water.receiveShadow = true;
     this.group.add(water);
     // Surroundings beyond the mapped area: land to the north/east/west, the inlet to the south.
     const land = new THREE.Mesh(
-      new THREE.PlaneGeometry(this.W * 6, this.H * 6).rotateX(-Math.PI / 2).translate(this.W / 2, -0.6, this.H / 2),
+      new THREE.PlaneGeometry(this.W * 6, this.H * 6)
+        .rotateX(-Math.PI / 2)
+        .translate(this.W / 2, -0.6, this.H / 2),
       new THREE.MeshLambertMaterial({ color: SCENE.ground }),
     );
     const sea = new THREE.Mesh(
-      new THREE.PlaneGeometry(this.W * 6, this.H * 3).rotateX(-Math.PI / 2).translate(this.W / 2, -0.55, this.H * 2.5 - 0.5),
+      new THREE.PlaneGeometry(this.W * 6, this.H * 3)
+        .rotateX(-Math.PI / 2)
+        .translate(this.W / 2, -0.55, this.H * 2.5 - 0.5),
       new THREE.MeshLambertMaterial({ color: SCENE.water }),
     );
     this.group.add(land, sea);
@@ -102,14 +114,19 @@ export class CityLayer {
     const uy = fy - y0;
     const e = this.world.elevation;
     const h =
-      e[y0 * W + x0] * (1 - ux) * (1 - uy) + e[y0 * W + x1] * ux * (1 - uy) + e[y1 * W + x0] * (1 - ux) * uy + e[y1 * W + x1] * ux * uy;
+      e[y0 * W + x0] * (1 - ux) * (1 - uy) +
+      e[y0 * W + x1] * ux * (1 - uy) +
+      e[y1 * W + x0] * (1 - ux) * uy +
+      e[y1 * W + x1] * ux * uy;
     return h / this.mPerUnit;
   }
 
   /** Top of whatever is at this spot (roof or ground), in world units. */
   surfaceAt(x: number, y: number): number {
     const i = Math.floor(y) * this.W + Math.floor(x);
-    return this.heightAt(x, y) + (this.world.buildingHeight[i] ?? 0) / this.mPerUnit;
+    return (
+      this.heightAt(x, y) + (this.world.buildingHeight[i] ?? 0) / this.mPerUnit
+    );
   }
 
   update(state: SimState, dirty: number[], dt: number) {
@@ -118,7 +135,11 @@ export class CityLayer {
     const hazardOn = k.hazard !== null;
     const impacted = !!state.flood?.impacted;
     let all = false;
-    if (k !== this.knowledgeRef || popOn !== this.lastPopOn || hazardOn !== this.lastHazardOn) {
+    if (
+      k !== this.knowledgeRef ||
+      popOn !== this.lastPopOn ||
+      hazardOn !== this.lastHazardOn
+    ) {
       this.knowledgeRef = k;
       this.lastPopOn = popOn;
       this.lastHazardOn = hazardOn;
@@ -137,7 +158,8 @@ export class CityLayer {
     const n = this.W * this.H;
     if (all) {
       for (let i = 0; i < n; i++) this.paintCell(i, state);
-      for (let b = 0; b < this.buildingRanges.length; b++) this.dirtyBuildings.add(b);
+      for (let b = 0; b < this.buildingRanges.length; b++)
+        this.dirtyBuildings.add(b);
     } else if (dirty.length) {
       for (const i of dirty) {
         this.paintCell(i, state);
@@ -194,15 +216,21 @@ export class CityLayer {
       const land = cnt - water;
       const y = water === cnt ? -0.4 : land > 0 ? h / land / this.mPerUnit : 0;
       pos.setY(v, water > 0 && water >= land ? Math.min(y, -0.15) : y);
-      tmp.copy(cGround).lerp(cPark, cnt ? park / cnt : 0).lerp(cWater, cnt ? water / cnt : 0);
+      tmp
+        .copy(cGround)
+        .lerp(cPark, cnt ? park / cnt : 0)
+        .lerp(cWater, cnt ? water / cnt : 0);
       colors.set([tmp.r, tmp.g, tmp.b], v * 3);
     }
     // Plane UVs put v=1 at the north edge; flip so texel row y matches grid row y.
     const uv = geo.attributes.uv as THREE.BufferAttribute;
     for (let v = 0; v < uv.count; v++) uv.setY(v, 1 - uv.getY(v));
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshLambertMaterial({ vertexColors: true }),
+    );
     mesh.receiveShadow = true;
     return mesh;
   }
@@ -213,17 +241,23 @@ export class CityLayer {
     const { terrain, buildingHeight } = this.world;
     const spots: [number, number][] = [];
     let seed = 1234567;
-    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const rand = () =>
+      (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
         const i = y * W + x;
-        if (terrain[i] !== PARK || buildingHeight[i] > 0 || rand() > 0.45) continue;
+        if (terrain[i] !== PARK || buildingHeight[i] > 0 || rand() > 0.45)
+          continue;
         spots.push([x + 0.2 + rand() * 0.6, y + 0.2 + rand() * 0.6]);
       }
     }
     const geo = new THREE.IcosahedronGeometry(0.55, 0);
     geo.translate(0, 0.75, 0);
-    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: SCENE.tree, flatShading: true }), spots.length);
+    const mesh = new THREE.InstancedMesh(
+      geo,
+      new THREE.MeshLambertMaterial({ color: SCENE.tree, flatShading: true }),
+      spots.length,
+    );
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const v = new THREE.Vector3();
@@ -253,7 +287,11 @@ export class CityLayer {
         const bx = r.p[i * 2 + 2];
         const by = r.p[i * 2 + 3];
         const steps = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / 2));
-        for (let s = 0; s < steps; s++) pts.push([ax + ((bx - ax) * s) / steps, ay + ((by - ay) * s) / steps]);
+        for (let s = 0; s < steps; s++)
+          pts.push([
+            ax + ((bx - ax) * s) / steps,
+            ay + ((by - ay) * s) / steps,
+          ]);
       }
       if (n > 0) pts.push([r.p[r.p.length - 2], r.p[r.p.length - 1]]);
       for (let i = 0; i + 1 < pts.length; i++) {
@@ -275,11 +313,17 @@ export class CityLayer {
       }
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     geo.computeVertexNormals();
     const mesh = new THREE.Mesh(
       geo,
-      new THREE.MeshLambertMaterial({ color: SCENE.road, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide }),
+      new THREE.MeshLambertMaterial({
+        color: SCENE.road,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
+        side: THREE.DoubleSide,
+      }),
     );
     mesh.receiveShadow = true;
     mesh.renderOrder = 1;
@@ -291,8 +335,10 @@ export class CityLayer {
     for (let b = 0; b < map.buildings.length; b++) {
       const { p, h } = map.buildings[b];
       const ring: THREE.Vector2[] = [];
-      for (let i = 0; i < p.length; i += 2) ring.push(new THREE.Vector2(p[i], p[i + 1]));
-      if (ring.length > 3 && ring[0].distanceTo(ring[ring.length - 1]) < 1e-3) ring.pop();
+      for (let i = 0; i < p.length; i += 2)
+        ring.push(new THREE.Vector2(p[i], p[i + 1]));
+      if (ring.length > 3 && ring[0].distanceTo(ring[ring.length - 1]) < 1e-3)
+        ring.pop();
       if (ring.length < 3) continue;
       if (THREE.ShapeUtils.isClockWise(ring)) ring.reverse();
       let base = Infinity;
@@ -303,13 +349,46 @@ export class CityLayer {
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const c = ring[(i + 1) % ring.length];
-        pos.push(a.x, base, a.y, c.x, base, c.y, c.x, top, c.y, a.x, base, a.y, c.x, top, c.y, a.x, top, a.y);
+        pos.push(
+          a.x,
+          base,
+          a.y,
+          c.x,
+          base,
+          c.y,
+          c.x,
+          top,
+          c.y,
+          a.x,
+          base,
+          a.y,
+          c.x,
+          top,
+          c.y,
+          a.x,
+          top,
+          a.y,
+        );
       }
       for (const [i0, i1, i2] of THREE.ShapeUtils.triangulateShape(ring, [])) {
         // Shape is in (x, y=south); flip winding so roofs face up in our x/z frame.
-        pos.push(ring[i0].x, top, ring[i0].y, ring[i2].x, top, ring[i2].y, ring[i1].x, top, ring[i1].y);
+        pos.push(
+          ring[i0].x,
+          top,
+          ring[i0].y,
+          ring[i2].x,
+          top,
+          ring[i2].y,
+          ring[i1].x,
+          top,
+          ring[i1].y,
+        );
       }
-      this.buildingRanges.push({ start, count: pos.length / 3 - start, heightM: h });
+      this.buildingRanges.push({
+        start,
+        count: pos.length / 3 - start,
+        heightM: h,
+      });
       this.buildingCells.push(this.footprintCells(ring));
     }
     this.buildingRanges.forEach((_, b) => {
@@ -320,13 +399,16 @@ export class CityLayer {
       }
     });
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     const colors = new Uint8Array(pos.length);
     this.buildingColors = new THREE.BufferAttribute(colors, 3, true);
     this.buildingColors.setUsage(THREE.DynamicDrawUsage);
-    geo.setAttribute('color', this.buildingColors);
+    geo.setAttribute("color", this.buildingColors);
     geo.computeVertexNormals();
-    const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    const mesh = new THREE.Mesh(
+      geo,
+      new THREE.MeshLambertMaterial({ vertexColors: true }),
+    );
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     this.buildingMesh = mesh;
@@ -346,17 +428,27 @@ export class CityLayer {
       cx += v.x;
       cy += v.y;
     }
-    for (let y = Math.max(0, Math.floor(minY)); y <= Math.min(this.H - 1, Math.ceil(maxY)); y++) {
+    for (
+      let y = Math.max(0, Math.floor(minY));
+      y <= Math.min(this.H - 1, Math.ceil(maxY));
+      y++
+    ) {
       const sy = y + 0.5;
       const xs: number[] = [];
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const b = ring[(i + 1) % ring.length];
-        if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy)) xs.push(a.x + ((sy - a.y) / (b.y - a.y)) * (b.x - a.x));
+        if ((a.y <= sy && b.y > sy) || (b.y <= sy && a.y > sy))
+          xs.push(a.x + ((sy - a.y) / (b.y - a.y)) * (b.x - a.x));
       }
       xs.sort((a, b) => a - b);
       for (let i = 0; i + 1 < xs.length; i += 2) {
-        for (let x = Math.max(0, Math.ceil(xs[i] - 0.5)); x <= Math.min(this.W - 1, Math.floor(xs[i + 1] - 0.5)); x++) out.push(y * this.W + x);
+        for (
+          let x = Math.max(0, Math.ceil(xs[i] - 0.5));
+          x <= Math.min(this.W - 1, Math.floor(xs[i + 1] - 0.5));
+          x++
+        )
+          out.push(y * this.W + x);
       }
     }
     if (out.length === 0) {
@@ -369,21 +461,29 @@ export class CityLayer {
 
   private buildLabels(map: MapJSON) {
     // One label per street name, on its longest segment's midpoint.
-    const best = new Map<number, { len: number; x: number; y: number; angle: number }>();
+    const best = new Map<
+      number,
+      { len: number; x: number; y: number; angle: number }
+    >();
     for (const r of map.roads) {
       if (r.n < 0) continue;
       for (let i = 0; i + 3 < r.p.length; i += 2) {
         const len = Math.hypot(r.p[i + 2] - r.p[i], r.p[i + 3] - r.p[i + 1]);
         const cur = best.get(r.n);
         if (!cur || len > cur.len) {
-          best.set(r.n, { len, x: (r.p[i] + r.p[i + 2]) / 2, y: (r.p[i + 1] + r.p[i + 3]) / 2, angle: 0 });
+          best.set(r.n, {
+            len,
+            x: (r.p[i] + r.p[i + 2]) / 2,
+            y: (r.p[i + 1] + r.p[i + 3]) / 2,
+            angle: 0,
+          });
         }
       }
     }
     for (const [n, b] of best) {
       if (b.len < 8) continue;
-      const el = document.createElement('div');
-      el.className = 'street-label';
+      const el = document.createElement("div");
+      el.className = "street-label";
       el.textContent = map.roadNames[n];
       const obj = new CSS2DObject(el);
       obj.position.set(b.x, this.heightAt(b.x, b.y) + 0.4, b.y);
@@ -416,12 +516,23 @@ export class CityLayer {
       else blend(SCENE.fogUnsearched, unsearched);
       if (state.config.info.population) {
         const p = this.populationAt(i, state);
-        if (p > 0) blend(SCENE.population, Math.min(1, p / 4) * (0.35 + 0.65 * unsearched));
+        if (p > 0)
+          blend(
+            SCENE.population,
+            Math.min(1, p / 4) * (0.35 + 0.65 * unsearched),
+          );
       }
-      if (k.hazard && k.hazard[i] > 0.05) blend(SCENE.hazard, k.hazard[i] * (0.4 + 0.6 * unsearched));
+      if (k.hazard && k.hazard[i] > 0.05)
+        blend(SCENE.hazard, k.hazard[i] * (0.4 + 0.6 * unsearched));
       if (k.frontier[i]) blend(SCENE.frontier);
     }
-    if (this.lastImpacted && this.floodBlend > 0 && state.flood && this.floodMaskAt(i, state)) blend(SCENE.flood, this.floodBlend);
+    if (
+      this.lastImpacted &&
+      this.floodBlend > 0 &&
+      state.flood &&
+      this.floodMaskAt(i, state)
+    )
+      blend(SCENE.flood, this.floodBlend);
     this.overlayData[o] = (rgb >> 16) & 255;
     this.overlayData[o + 1] = (rgb >> 8) & 255;
     this.overlayData[o + 2] = rgb & 255;
@@ -433,7 +544,8 @@ export class CityLayer {
     if (state.crowds.length) {
       const x = (i % this.W) + 0.5;
       const y = Math.floor(i / this.W) + 0.5;
-      for (const c of state.crowds) if ((c.x - x) ** 2 + (c.y - y) ** 2 <= c.radius * c.radius) p += 2.5;
+      for (const c of state.crowds)
+        if ((c.x - x) ** 2 + (c.y - y) ** 2 <= c.radius * c.radius) p += 2.5;
     }
     return p;
   }
@@ -463,7 +575,10 @@ export class CityLayer {
       }
       s /= cells.length;
       const r = this.buildingRanges[b];
-      c.copy(r.heightM > state.config.flightAltitudeM ? cTall : cUn).lerp(cDone, s * s);
+      c.copy(r.heightM > state.config.flightAltitudeM ? cTall : cUn).lerp(
+        cDone,
+        s * s,
+      );
       if (hz > 0.05) c.lerp(cHaz, hz * (1 - s) * 0.8);
       const R = Math.round(c.r * 255);
       const G = Math.round(c.g * 255);

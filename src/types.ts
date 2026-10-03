@@ -20,7 +20,7 @@ export interface WorldMeta {
   cellSizeM: number;
   width: number;
   height: number;
-  source: 'osm' | 'procedural';
+  source: "osm" | "procedural";
 }
 
 export interface World {
@@ -75,7 +75,7 @@ export interface InfoModes {
   disaster: boolean; // hazard + urgency available (requires scenario)
 }
 
-export type Scenario = 'none' | 'tsunami';
+export type Scenario = "none" | "tsunami";
 
 export interface SimConfig {
   seed: number;
@@ -98,13 +98,13 @@ export interface SimConfig {
 // ---------------------------------------------------------------------------
 
 export type DroneStatus =
-  | 'IDLE'
-  | 'TRAVELLING'
-  | 'SEARCHING'
-  | 'RETURNING'
-  | 'LOW_BATTERY'
-  | 'CHARGING'
-  | 'DISABLED';
+  | "IDLE"
+  | "TRAVELLING"
+  | "SEARCHING"
+  | "RETURNING"
+  | "LOW_BATTERY"
+  | "CHARGING"
+  | "DISABLED";
 
 export interface DroneView {
   id: number;
@@ -121,7 +121,7 @@ export interface DroneView {
   dockedTruck: number | null; // truck the drone is sitting on (landed), else null
 }
 
-export type TruckStatus = 'PARKED' | 'DRIVING';
+export type TruckStatus = "PARKED" | "DRIVING";
 
 export interface TruckView {
   id: number;
@@ -148,7 +148,7 @@ export interface TaskView {
   y1: number;
   label: string; // human-readable location, e.g. "Lonsdale Ave & W 3rd St"
   priority: number; // normalized 0..1 among current tasks
-  breakdown: Partial<Record<keyof Weights | 'rescue', number>>; // normalized term values 0..1
+  breakdown: Partial<Record<keyof Weights | "rescue", number>>; // normalized term values 0..1
   assignedDrone: number | null;
   searchedFrac: number; // 0..1
   isFrontier: boolean;
@@ -190,18 +190,18 @@ export interface FloodState {
 }
 
 export type SimEventType =
-  | 'assign'
-  | 'reassign'
-  | 'replan'
-  | 'survivor'
-  | 'failure'
-  | 'lowBattery'
-  | 'recharged'
-  | 'taskComplete'
-  | 'impact'
-  | 'truck'
-  | 'placed'
-  | 'complete';
+  | "assign"
+  | "reassign"
+  | "replan"
+  | "survivor"
+  | "failure"
+  | "lowBattery"
+  | "recharged"
+  | "taskComplete"
+  | "impact"
+  | "truck"
+  | "placed"
+  | "complete";
 
 export interface SimEvent {
   t: number;

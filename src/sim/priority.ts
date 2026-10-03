@@ -1,4 +1,4 @@
-import type { Weights } from '../types';
+import type { Weights } from "../types";
 
 /** Raw per-sector sums over not-yet-searched cells (weighted by remaining unsearched-ness). */
 export interface SectorAgg {
@@ -28,7 +28,17 @@ export interface TermContext {
 }
 
 export function emptyAgg(): SectorAgg {
-  return { believed: 0, searchedFrac: 0, unsearched: 0, population: 0, hazard: 0, flood: 0, rescue: 0, frontier: false, boost: 0 };
+  return {
+    believed: 0,
+    searchedFrac: 0,
+    unsearched: 0,
+    population: 0,
+    hazard: 0,
+    flood: 0,
+    rescue: 0,
+    frontier: false,
+    boost: 0,
+  };
 }
 
 /** Benefit terms, each normalized to 0..1 across the candidate set. */

@@ -1,4 +1,4 @@
-import type { Weights } from '../types';
+import type { Weights } from "../types";
 
 export const DETOUR = 1.15;
 
@@ -49,7 +49,11 @@ export interface Assignment {
  * After each pick, raise the redundancy of tasks near the one just assigned so the fleet spreads out.
  * Pairs whose round trip exceeds the drone's remaining battery are excluded.
  */
-export function allocate(drones: AllocDrone[], tasks: AllocTask[], p: AllocParams): Assignment[] {
+export function allocate(
+  drones: AllocDrone[],
+  tasks: AllocTask[],
+  p: AllocParams,
+): Assignment[] {
   const w = p.weights;
   const nT = tasks.length;
   const redundancy = new Float64Array(nT);
@@ -70,17 +74,31 @@ export function allocate(drones: AllocDrone[], tasks: AllocTask[], p: AllocParam
         if (taken[ti]) continue;
         const t = tasks[ti];
         const dist = Math.hypot(t.cx - d.x, t.cy - d.y);
-        const need = dist * DETOUR + Math.min(t.searchCost, 30) + backDist[ti] + p.margin;
+        const need =
+          dist * DETOUR + Math.min(t.searchCost, 30) + backDist[ti] + p.margin;
         if (need > d.battery) continue;
         const distCost = Math.min(1, dist / distScale);
         const battCost = Math.min(1, need / p.capacity);
         const red = Math.min(1, redundancy[ti]);
-        const pri = d.task === t.id ? Math.max(t.priority, d.commitment) : t.priority;
-        let u = pri - w.distance * distCost - w.battery * battCost - w.redundancy * red;
+        const pri =
+          d.task === t.id ? Math.max(t.priority, d.commitment) : t.priority;
+        let u =
+          pri -
+          w.distance * distCost -
+          w.battery * battCost -
+          w.redundancy * red;
         if (d.task === t.id) u += p.hysteresis;
         else if (t.released) u += p.releasedBonus;
         if (!best || u > best.utility) {
-          best = { droneId: d.id, taskId: t.id, utility: u, distance: dist, distCost, battCost, redundancy: red };
+          best = {
+            droneId: d.id,
+            taskId: t.id,
+            utility: u,
+            distance: dist,
+            distCost,
+            battCost,
+            redundancy: red,
+          };
           bestDrone = di;
           bestTask = ti;
         }
@@ -101,7 +119,11 @@ export function allocate(drones: AllocDrone[], tasks: AllocTask[], p: AllocParam
   return out;
 }
 
-export function nearestHome(homes: { x: number; y: number }[], x: number, y: number): number {
+export function nearestHome(
+  homes: { x: number; y: number }[],
+  x: number,
+  y: number,
+): number {
   let best = Infinity;
   for (const h of homes) best = Math.min(best, Math.hypot(h.x - x, h.y - y));
   return best;

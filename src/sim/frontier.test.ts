@@ -1,16 +1,17 @@
-import { describe, expect, it } from 'vitest';
-import { updateFrontier } from './frontier';
-import { Knowledge } from './knowledge';
+import { describe, expect, it } from "vitest";
+import { updateFrontier } from "./frontier";
+import { Knowledge } from "./knowledge";
 
-describe('frontier', () => {
-  it('marks the ring of unsearched land around a searched block, but not water', () => {
+describe("frontier", () => {
+  it("marks the ring of unsearched land around a searched block, but not water", () => {
     const w = 12;
     const h = 10;
     const k = new Knowledge(w * h);
     k.known.fill(1);
     const terrain = new Uint8Array(w * h).fill(1);
     for (let x = 0; x < w; x++) terrain[9 * w + x] = 0; // sea row
-    for (let y = 3; y <= 5; y++) for (let x = 3; x <= 5; x++) k.searched[y * w + x] = 1;
+    for (let y = 3; y <= 5; y++)
+      for (let x = 3; x <= 5; x++) k.searched[y * w + x] = 1;
     for (let x = 0; x < w; x++) k.searched[8 * w + x] = 0.95; // searched strip next to the sea
     const count = updateFrontier(k, terrain, w, h);
 
@@ -28,7 +29,7 @@ describe('frontier', () => {
     expect(k.drain().length).toBe(count);
   });
 
-  it('treats the known/unknown boundary as frontier when geography is unknown', () => {
+  it("treats the known/unknown boundary as frontier when geography is unknown", () => {
     const w = 8;
     const k = new Knowledge(w * w);
     const terrain = new Uint8Array(w * w).fill(1);

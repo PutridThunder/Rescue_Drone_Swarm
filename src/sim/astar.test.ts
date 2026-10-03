@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { AStar, smoothPath } from './astar';
+import { describe, expect, it } from "vitest";
+import { AStar, smoothPath } from "./astar";
 
 function grid(w: number, h: number, walls: [number, number][]) {
   const b = new Uint8Array(w * h);
@@ -18,8 +18,8 @@ function pathCost(path: number[], w: number) {
   return c;
 }
 
-describe('AStar', () => {
-  it('finds the optimal octile path on an open grid', () => {
+describe("AStar", () => {
+  it("finds the optimal octile path on an open grid", () => {
     const a = new AStar(20, 20);
     const p = a.find(0, 0, 10, 4, new Uint8Array(400))!;
     expect(p[0]).toBe(0);
@@ -27,7 +27,7 @@ describe('AStar', () => {
     expect(pathCost(p, 20)).toBeCloseTo(6 + 4 * Math.SQRT2, 6);
   });
 
-  it('routes around a wall through the gap without touching obstacles', () => {
+  it("routes around a wall through the gap without touching obstacles", () => {
     const walls: [number, number][] = [];
     for (let y = 0; y < 20; y++) if (y !== 17) walls.push([10, y]);
     const blocked = grid(20, 20, walls);
@@ -42,7 +42,7 @@ describe('AStar', () => {
     expect(wps.length).toBeLessThan(p.length);
   });
 
-  it('does not cut corners diagonally between two obstacles', () => {
+  it("does not cut corners diagonally between two obstacles", () => {
     const blocked = grid(3, 3, [
       [1, 0],
       [0, 1],
@@ -51,7 +51,7 @@ describe('AStar', () => {
     expect(p).toBeNull();
   });
 
-  it('returns null when the goal is enclosed or blocked', () => {
+  it("returns null when the goal is enclosed or blocked", () => {
     const walls: [number, number][] = [];
     for (let i = 4; i <= 6; i++) walls.push([i, 4], [i, 6], [4, i], [6, i]);
     const blocked = grid(12, 12, walls);
@@ -60,7 +60,7 @@ describe('AStar', () => {
     expect(a.find(0, 0, 4, 4, blocked)).toBeNull();
   });
 
-  it('avoids high-cost cells when a cheap detour exists', () => {
+  it("avoids high-cost cells when a cheap detour exists", () => {
     const cost = new Float32Array(15 * 15);
     for (let y = 0; y < 12; y++) cost[y * 15 + 7] = 20;
     const p = new AStar(15, 15).find(0, 5, 14, 5, new Uint8Array(225), cost)!;

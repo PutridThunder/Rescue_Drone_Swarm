@@ -1,10 +1,10 @@
-import * as THREE from 'three';
-import { MapControls } from 'three/examples/jsm/controls/MapControls.js';
-import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import type { MapJSON, SimState, World } from '../types';
-import { ActorLayer } from './actors';
-import { CityLayer } from './cityLayer';
-import { SCENE } from './palette';
+import * as THREE from "three";
+import { MapControls } from "three/examples/jsm/controls/MapControls.js";
+import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
+import type { MapJSON, SimState, World } from "../types";
+import { ActorLayer } from "./actors";
+import { CityLayer } from "./cityLayer";
+import { SCENE } from "./palette";
 
 export interface RenderOptions {
   showPaths: boolean;
@@ -44,7 +44,7 @@ export class Renderer {
     container.appendChild(this.renderer.domElement);
 
     this.labelRenderer = new CSS2DRenderer();
-    this.labelRenderer.domElement.className = 'label-layer';
+    this.labelRenderer.domElement.className = "label-layer";
     container.appendChild(this.labelRenderer.domElement);
 
     this.scene.background = new THREE.Color(SCENE.background);
@@ -98,7 +98,10 @@ export class Renderer {
     this.city.update(state, dirtyCells, dt);
     this.actors.update(state, this.clock, dt);
 
-    if (this.follow !== null && this.actors.dronePosition(this.follow, this.followPos)) {
+    if (
+      this.follow !== null &&
+      this.actors.dronePosition(this.follow, this.followPos)
+    ) {
       const delta = this.followPos.clone().sub(this.controls.target);
       delta.y = 0;
       const step = delta.multiplyScalar(Math.min(1, dt * 4));
@@ -127,10 +130,18 @@ export class Renderer {
   setFollow(id: number | null) {
     this.follow = id;
     if (id !== null && this.actors.dronePosition(id, this.followPos)) {
-      const dir = this.camera.position.clone().sub(this.controls.target).normalize();
-      const dist = Math.min(this.camera.position.distanceTo(this.controls.target), 45);
+      const dir = this.camera.position
+        .clone()
+        .sub(this.controls.target)
+        .normalize();
+      const dist = Math.min(
+        this.camera.position.distanceTo(this.controls.target),
+        45,
+      );
       this.controls.target.copy(this.followPos).setY(0);
-      this.camera.position.copy(this.controls.target).addScaledVector(dir, dist);
+      this.camera.position
+        .copy(this.controls.target)
+        .addScaledVector(dir, dist);
     }
   }
 
@@ -145,7 +156,13 @@ export class Renderer {
     if (!hit) return null;
     const x = hit.point.x - this.offset.x;
     const y = hit.point.z - this.offset.z;
-    if (x < 0 || y < 0 || x >= this.world.meta.width || y >= this.world.meta.height) return null;
+    if (
+      x < 0 ||
+      y < 0 ||
+      x >= this.world.meta.width ||
+      y >= this.world.meta.height
+    )
+      return null;
     return { x, y };
   }
 
@@ -191,7 +208,10 @@ export class Renderer {
 
   private setRay(clientX: number, clientY: number) {
     const rect = this.renderer.domElement.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1,
+    );
     this.raycaster.setFromCamera(ndc, this.camera);
   }
 }
