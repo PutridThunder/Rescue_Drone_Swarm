@@ -1,6 +1,6 @@
 // Shared shape and helpers for online intel sources. Each source lives in its own file and
 // exports one async function: (ctx) => SourceResult. It must never throw - report errors in `step`.
-import type { IntelStep, Signal } from "../../../src/intel/types";
+import type { IntelStep, RegionalEvent, Signal } from "../../../src/intel/types";
 
 export interface IntelEnv {
   TICKETMASTER_API_KEY?: string;
@@ -18,6 +18,7 @@ export interface SourceContext {
 
 export interface SourceResult {
   signals: Signal[];
+  regional?: RegionalEvent[]; // big events outside the map whose crowds ripple in
   step: IntelStep;
 }
 

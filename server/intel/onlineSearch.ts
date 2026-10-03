@@ -26,7 +26,7 @@ export async function runOnlineSearch(req: IntelRequest, env: IntelEnv): Promise
     places,
     at: ctx.at,
     signals: results.flatMap((r) => r.signals),
-    regional,
+    regional: [...regional, ...results.flatMap((r) => r.regional ?? [])],
     steps: [
       { source: "OpenStreetMap", status: "ok", detail: `${places.length} gathering places (offline)` },
       { source: "Regional events", status: "ok", detail: `${regional.length} scheduled big events (offline)` },

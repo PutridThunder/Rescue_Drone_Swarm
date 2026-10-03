@@ -40,7 +40,7 @@ It works in two layers, using free data only:
 
 1. **Offline (bundled, instant, no network):**
    - `public/intel/places.json`: 234 gathering places in the map from OpenStreetMap (schools, SeaBus, hospital, markets, venues, restaurants) with estimated capacities. Refresh with `npm run intel:places`.
-   - `public/intel/regional-events.json`: big events outside the map whose crowds ripple in, such as the FIFA World Cup 2026 matches at BC Place (fans pass through Lonsdale Quay; pubs fill for watch parties).
+   - `public/intel/regional-events.json`: big upcoming events outside the map whose crowds ripple in (fans pass through Lonsdale Quay; pubs fill for sports watch parties). Empty by default; with a Ticketmaster key, events at BC Place, Rogers Arena and the PNE are found live.
    - `src/intel/occupancy.ts`: how full each kind of place is by day of week and hour.
 2. **Online (dev server, `POST /api/intel`):** adds live signals. Social posts that mention a place raise its estimate and confidence; scheduled events become hotspots.
 

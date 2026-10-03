@@ -29,6 +29,7 @@ export class IntelPanel {
       <div class="chips" id="intel-chips">
         <button data-at="now">Now</button>
         ${regional
+          .filter((ev) => Date.parse(ev.start) > Date.now()) // upcoming only: we plan for the present
           .slice(0, 4)
           .map((ev) => `<button data-at="${new Date(Date.parse(ev.start) - ARRIVAL_PEAK_MIN * 60_000).toISOString()}" title="${escapeHtml(ev.name)} at ${escapeHtml(ev.venue)}">${escapeHtml(shortName(ev.name))}</button>`)
           .join("")}
@@ -101,7 +102,7 @@ function toLocalInput(d: Date): string {
 }
 
 function shortName(name: string): string {
-  return name.replace(/^FIFA World Cup:\s*/, "FIFA: ");
+  return name.length > 28 ? `${name.slice(0, 27)}…` : name;
 }
 
 function escapeHtml(s: string): string {
