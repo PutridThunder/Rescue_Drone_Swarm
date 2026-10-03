@@ -470,6 +470,14 @@ export class ActorLayer {
     return true;
   }
 
+  /** World position and heading (radians) of a drone, for the drone cam. Null if unknown. */
+  dronePose(id: number, out: THREE.Vector3): number | null {
+    const a = this.drones.get(id);
+    if (!a) return null;
+    a.group.getWorldPosition(out);
+    return -a.group.rotation.y;
+  }
+
   dronesWorld(): { id: number; pos: THREE.Vector3 }[] {
     return [...this.drones.values()].map((a) => ({
       id: a.id,

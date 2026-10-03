@@ -362,6 +362,7 @@ export class UI {
           ${this.view("showSensors", "Camera view", true)}
           ${this.view("showLabels", "Street names", true)}
           ${this.view("revealHidden", "Reveal hidden survivors", false)}
+          ${this.view("showDroneCam", "Drone cam", true)}
         </div>
       </div>
 

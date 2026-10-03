@@ -1,6 +1,7 @@
 import { IntelController } from "./intel/IntelController";
 import type { CrowdPlacement } from "./intel/toCrowds";
 import { loadMap, loadWorld } from "./world/loadWorld";
+import { DroneCamPanel } from "./render/DroneCamPanel";
 import { Renderer } from "./render/Renderer";
 import { UI, type Tool } from "./render/UI";
 import { Simulation } from "./sim/Simulation";
@@ -93,13 +94,46 @@ async function boot() {
     },
     onFollow(id) {
       renderer.setFollow(id);
+      if (id !== null) camDrone = id;
+      syncDroneCam();
     },
     onView(o) {
+      if (o.showDroneCam !== undefined) {
+        camOn = o.showDroneCam;
+        syncDroneCam();
+      }
       renderer.setOptions(o);
     },
   });
   ui.setRunning(false, false);
   ui.setState(sim.state);
+
+  // Drone cam: shows what the followed drone (or the chosen one) sees.
+  let camDrone = 1;
+  let camOn = true;
+  const droneCam = new DroneCamPanel(document.getElementById("hud")!, {
+    onNext() {
+      const ids = sim.state.drones.map((d) => d.id);
+      camDrone = ids[(ids.indexOf(camDrone) + 1) % ids.length];
+      syncDroneCam();
+    },
+    onClose() {
+      camOn = false;
+      syncDroneCam();
+    },
+  });
+  function syncDroneCam() {
+    renderer.setDroneCam(camOn ? camDrone : null, droneCam.viewport);
+    droneCam.setVisible(camOn);
+  }
+  function updateDroneCam() {
+    const d = sim.state.drones.find((x) => x.id === camDrone) ?? sim.state.drones[0];
+    if (!d) return;
+    camDrone = d.id;
+    const target = d.taskId != null ? (sim.state.tasks.find((t) => t.id === d.taskId)?.label ?? null) : null;
+    droneCam.update(d, target, config.flightAltitudeM);
+  }
+  syncDroneCam();
 
   // Crowd intel: changing the disaster time or searching online re-seeds the mission.
   await IntelController.create(world, ui.intelSlot, (crowds, report) => {
@@ -135,6 +169,10 @@ async function boot() {
         const next = renderer.following === id ? null : id;
         renderer.setFollow(next);
         ui.setFollow(next);
+        if (next !== null) {
+          camDrone = next;
+          syncDroneCam();
+        }
         ui.toast(next ? `Following Drone ${id}` : "Stopped following");
         return;
       }
@@ -198,6 +236,7 @@ async function boot() {
     if (uiTimer <= 0 || events.length) {
       uiTimer = UI_INTERVAL;
       ui.setState(sim.state);
+      if (camOn) updateDroneCam();
     }
     if (sim.state.metrics.complete && !resultsShown) {
       resultsShown = true;

@@ -4,6 +4,7 @@ import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type { MapJSON, SimState, World } from "../types";
 import { ActorLayer } from "./actors";
 import { CityLayer } from "./cityLayer";
+import { DroneCam } from "./droneCam";
 import { SCENE } from "./palette";
 
 export interface RenderOptions {
@@ -11,6 +12,7 @@ export interface RenderOptions {
   showSensors: boolean;
   showLabels: boolean;
   revealHidden: boolean;
+  showDroneCam: boolean; // handled by main.ts (picture-in-picture window)
 }
 
 export class Renderer {
@@ -30,6 +32,10 @@ export class Renderer {
   private clock = 0;
   private lastTime = performance.now();
   private labelsWanted = true;
+  private readonly droneCam = new DroneCam();
+  private camDrone: number | null = null;
+  private camCanvas: HTMLCanvasElement | null = null; // drone cam window canvas
+  private readonly camPos = new THREE.Vector3();
 
   constructor(
     private readonly container: HTMLElement,
@@ -108,6 +114,10 @@ export class Renderer {
       this.controls.target.add(step);
       this.camera.position.add(step);
     }
+    if (this.camDrone !== null) {
+      const yaw = this.actors.dronePose(this.camDrone, this.camPos);
+      if (yaw !== null) this.droneCam.follow(this.camPos, yaw, dt);
+    }
     this.controls.update();
     // Street names only when zoomed in enough to read them.
     const dist = this.camera.position.distanceTo(this.controls.target);
@@ -115,8 +125,16 @@ export class Renderer {
   }
 
   render() {
+    if (this.camDrone !== null && this.camCanvas) this.droneCam.renderTo(this.renderer, this.scene, this.camCanvas);
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
+  }
+
+  /** Show what `droneId` sees in `canvas` (the drone cam window); null hides it. */
+  setDroneCam(droneId: number | null, canvas: HTMLCanvasElement | null) {
+    if (droneId !== this.camDrone) this.droneCam.reset();
+    this.camDrone = droneId;
+    this.camCanvas = canvas;
   }
 
   setOptions(o: Partial<RenderOptions>) {
