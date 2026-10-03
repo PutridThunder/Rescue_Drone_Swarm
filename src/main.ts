@@ -135,6 +135,7 @@ async function boot() {
   function syncDroneCam() {
     renderer.setDroneCam(camOn ? camDrone : null, droneCam.viewport);
     droneCam.setVisible(camOn);
+    ui.setDroneCamOn(camOn);
   }
   function updateDroneCam() {
     const d = sim.state.drones.find((x) => x.id === camDrone) ?? sim.state.drones[0];

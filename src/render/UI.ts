@@ -54,6 +54,8 @@ const ICON = {
     '<path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/>',
   close:
     '<path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  camera:
+    '<path d="M3 7h3l2-2.5h8L18 7h3v12H3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/>',
 };
 const svg = (name: keyof typeof ICON, size = 18) =>
   `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true">${ICON[name]}</svg>`;
@@ -145,6 +147,12 @@ export class UI {
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
+
+  /** Keep the top-bar button and the legend checkbox in sync with the drone cam state. */
+  setDroneCamOn(on: boolean) {
+    this.q("#cam-toggle").classList.toggle("on", on);
+    this.q<HTMLInputElement>('[data-view="showDroneCam"]').checked = on;
+  }
 
   /** Tsunami needs a coastline; inland areas get the scenario disabled. */
   setTsunamiAvailable(available: boolean) {
@@ -297,6 +305,7 @@ export class UI {
         <button id="play" class="btn primary"></button>
         <div class="seg" id="speed">${[1, 2, 4, 8].map((s) => `<button data-speed="${s}" class="${s === 1 ? "on" : ""}">${s}×</button>`).join("")}</div>
         <button id="reset" class="btn icon" title="Restart mission">${svg("reset")}</button>
+        <button id="cam-toggle" class="btn cam-toggle" title="Show or hide the drone camera">${svg("camera")}<span>Drone cam</span></button>
         <span class="clock" id="clock">00:00</span>
         <span class="chip danger" id="tsunami" hidden></span>
       </div>
@@ -544,6 +553,11 @@ export class UI {
         this.cb.onTool(this.tool);
       }),
     );
+    this.q("#cam-toggle").addEventListener("click", () => {
+      const on = !this.q("#cam-toggle").classList.contains("on");
+      this.setDroneCamOn(on);
+      this.cb.onView({ showDroneCam: on });
+    });
     this.el.querySelectorAll<HTMLInputElement>("[data-view]").forEach((input) =>
       input.addEventListener("change", () =>
         this.cb.onView({

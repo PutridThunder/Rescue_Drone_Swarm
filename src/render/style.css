@@ -968,3 +968,16 @@ input[type="range"] {
   .area-menu { left: 0; right: 0; }
   .street-label { font-size: 10px; }
 }
+
+/* Drone cam toggle in the top bar */
+.cam-toggle { color: var(--muted); }
+.cam-toggle.on { background: var(--accent-soft); border-color: var(--accent-soft); color: var(--accent); }
+@media (max-width: 760px) {
+  .cam-toggle span { display: none; }
+  .cam-toggle { width: 36px; padding: 0; justify-content: center; }
+}
+
+/* Drone cam: drag to move */
+.dronecam { cursor: grab; touch-action: none; user-select: none; }
+.dronecam.dragging { cursor: grabbing; box-shadow: 0 12px 40px rgba(20, 30, 50, 0.25); }
+.dronecam button { cursor: pointer; }
