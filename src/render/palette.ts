@@ -3,8 +3,9 @@
 export const SCENE = {
   background: 0xeef1f5,
   ground: 0xebe9e3,
-  park: 0xcfe3c3,
-  water: 0x9ccfe8,
+  park: 0xc9e2b8,
+  water: 0x6f9fc8,
+  tree: 0x6fae5a,
   road: 0xffffff,
   buildingUnsearched: 0xcdd3dc,
   buildingSearched: 0xffffff,

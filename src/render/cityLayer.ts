@@ -79,6 +79,7 @@ export class CityLayer {
     );
     this.group.add(land, sea);
 
+    this.group.add(this.buildTrees());
     if (map) {
       this.group.add(this.buildRoads(map));
       const buildings = this.buildBuildings(map);
@@ -202,6 +203,39 @@ export class CityLayer {
     geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /** Scatter low-poly trees over park cells (deterministic), like a model-railway diorama. */
+  private buildTrees(): THREE.InstancedMesh {
+    const { W, H } = this;
+    const { terrain, buildingHeight } = this.world;
+    const spots: [number, number][] = [];
+    let seed = 1234567;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = y * W + x;
+        if (terrain[i] !== PARK || buildingHeight[i] > 0 || rand() > 0.45) continue;
+        spots.push([x + 0.2 + rand() * 0.6, y + 0.2 + rand() * 0.6]);
+      }
+    }
+    const geo = new THREE.IcosahedronGeometry(0.55, 0);
+    geo.translate(0, 0.75, 0);
+    const mesh = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({ color: SCENE.tree, flatShading: true }), spots.length);
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const v = new THREE.Vector3();
+    const sc = new THREE.Vector3();
+    spots.forEach(([x, y], k) => {
+      const s = 0.7 + rand() * 0.7;
+      sc.set(s, s * (0.9 + rand() * 0.5), s);
+      q.setFromAxisAngle(v.set(0, 1, 0), rand() * Math.PI);
+      m.compose(new THREE.Vector3(x, this.heightAt(x, y), y), q, sc);
+      mesh.setMatrixAt(k, m);
+    });
+    mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
   }
