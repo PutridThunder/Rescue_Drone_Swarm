@@ -1,3 +1,8 @@
 node_modules
 dist
 scripts/.cache
+.env
+.env.*
+!.env.example
+.cache
+public/intel/snapshot.json

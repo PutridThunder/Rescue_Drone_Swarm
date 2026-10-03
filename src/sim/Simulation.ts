@@ -1,4 +1,5 @@
 import type {
+  CrowdOptions,
   CrowdView,
   FloodState,
   InfoModes,
@@ -64,6 +65,7 @@ const TRUCK_REPLAN = 6; // s between truck repositioning decisions
 const TRUCK_MOVE_MIN = 15; // cells; don't bother relocating for less
 const DOCK_DIST = 0.6; // cells
 const FACADE_GAIN = 0.6; // looking at a high-rise from the street is less thorough than overflying
+// Defaults for a crowd the user plants by hand.
 const CROWD_RADIUS = 3; // cells
 const CROWD_PEOPLE = 60;
 const CROWD_SURVIVORS = 3;
@@ -106,6 +108,8 @@ export class Simulation implements ISimulation {
   private readonly drones: Drone[];
   private readonly trucks: Truck[];
   private readonly acc = new MetricsAccumulator();
+  /** Crowd-intel prior: predicted people per cell (used when info.crowds is on). */
+  private readonly intelPop: Float32Array;
   /** Population prior (world copy; user-planted crowds add to it). */
   private readonly pop: Float32Array;
   /** Cells no sensor can see (inside high-rises): excluded from coverage like water. */
@@ -146,6 +150,7 @@ export class Simulation implements ISimulation {
     this.floodProne = new Uint8Array(N);
 
     this.pop = Float32Array.from(world.population);
+    this.intelPop = new Float32Array(N);
     this.tall = new Uint8Array(N);
     for (let i = 0; i < N; i++)
       if (world.buildingHeight[i] > cfg.flightAltitudeM) this.tall[i] = 1;
@@ -382,37 +387,33 @@ export class Simulation implements ISimulation {
   }
 
   /**
-   * Plant a crowd: a reported gathering the fleet knows about (population prior, used when
-   * population intel is on) with a few people actually there to be found.
+   * Add a crowd. User crowds are a reported gathering (population prior, used when population
+   * intel is on); intel crowds are predicted by crowd intel (used when crowd intel is on).
+   * Either way, `survivors` people are really there to be found.
    */
-  addCrowd(x: number, y: number): CrowdView | null {
+  addCrowd(x: number, y: number, opts: CrowdOptions = {}): CrowdView | null {
     const i = this.cellIndex(x, y);
     if (i < 0 || this.world.terrain[i] === WATER) return null;
-    const cells = this.cellsAround(x, y, CROWD_RADIUS);
+    const { people = CROWD_PEOPLE, radius = CROWD_RADIUS, survivors = CROWD_SURVIVORS, source = "user" } = opts;
+    const cells = this.cellsAround(x, y, radius);
     if (cells.length === 0) return null;
-    for (const j of cells) this.pop[j] += CROWD_PEOPLE / cells.length;
-    const crowd: CrowdView = {
-      id: this.nextCrowdId++,
-      x,
-      y,
-      radius: CROWD_RADIUS,
-      people: CROWD_PEOPLE,
-    };
+    const prior = source === "intel" ? this.intelPop : this.pop;
+    for (const j of cells) prior[j] += people / cells.length;
+    const crowd: CrowdView = { id: this.nextCrowdId++, x, y, radius, people, source, label: opts.label };
     this.state.crowds.push(crowd);
-    this.state.metrics.populationTotal += CROWD_PEOPLE;
-    for (let k = 0; k < CROWD_SURVIVORS; k++) {
+    this.state.metrics.populationTotal += people;
+    for (let k = 0; k < survivors; k++) {
       const j = cells[this.rng.int(cells.length)];
-      this.addSurvivor(
-        (j % this.W) + this.rng.range(0.2, 0.8),
-        Math.floor(j / this.W) + this.rng.range(0.2, 0.8),
-      );
+      const s = this.addSurvivor((j % this.W) + this.rng.range(0.2, 0.8), Math.floor(j / this.W) + this.rng.range(0.2, 0.8));
+      if (s && source === "intel") s.placed = false; // part of the scenario, not a user marker
     }
-    const label = this.sectors[sectorAt(x, y, this.sectorCols)].view.label;
-    if (!this.state.metrics.complete) {
-      this.replanReasons.push(`crowd reported near ${label}`);
+    const label = opts.label ?? this.sectors[sectorAt(x, y, this.sectorCols)].view.label;
+    const usedNow = source === "intel" ? this.state.config.info.crowds : this.state.config.info.population;
+    if (!this.state.metrics.complete && usedNow) {
+      this.replanReasons.push(`crowd ${source === "intel" ? "predicted" : "reported"} at ${label}`);
       this.announceReplan = true;
     }
-    this.emit("placed", `Crowd of ~${CROWD_PEOPLE} reported near ${label}`);
+    if (source === "user") this.emit("placed", `Crowd of ~${people} reported near ${label}`);
     return crowd;
   }
 
@@ -423,7 +424,7 @@ export class Simulation implements ISimulation {
     const r2 = radius * radius;
     for (let k = st.crowds.length - 1; k >= 0; k--) {
       const c = st.crowds[k];
-      if ((c.x - x) ** 2 + (c.y - y) ** 2 > r2) continue;
+      if (c.source !== "user" || (c.x - x) ** 2 + (c.y - y) ** 2 > r2) continue;
       const cells = this.cellsAround(c.x, c.y, c.radius);
       for (const j of cells)
         this.pop[j] = Math.max(
@@ -1327,7 +1328,7 @@ export class Simulation implements ISimulation {
         const u = 1 - sv;
         agg.unsearched += u;
         const live = impacted && flood![i] ? 0 : 1;
-        const pop = info.population ? population[i] : 1;
+        const pop = (info.population ? population[i] : 1) + (info.crowds ? this.intelPop[i] : 0);
         const hz = hazard ? hazard[i] : 0;
         agg.population += pop * u * live;
         agg.hazard += hz * u * live;

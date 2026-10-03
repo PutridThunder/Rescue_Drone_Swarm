@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { CSS2DObject } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import type {
   CrowdView,
   DroneView,
@@ -356,10 +357,11 @@ class CrowdMarker {
   readonly group = new THREE.Group();
 
   constructor(c: CrowdView, ctx: ActorContext) {
+    const color = c.source === "intel" ? SCENE.intel : SCENE.crowd;
     const disc = new THREE.Mesh(
       new THREE.CircleGeometry(c.radius, 40).rotateX(-Math.PI / 2),
       new THREE.MeshBasicMaterial({
-        color: SCENE.crowd,
+        color,
         transparent: true,
         opacity: 0.18,
         depthWrite: false,
@@ -371,7 +373,7 @@ class CrowdMarker {
         -Math.PI / 2,
       ),
       new THREE.MeshBasicMaterial({
-        color: SCENE.crowd,
+        color,
         transparent: true,
         opacity: 0.7,
         depthWrite: false,
@@ -379,7 +381,7 @@ class CrowdMarker {
     );
     edge.renderOrder = 3;
     this.group.add(disc, edge);
-    const mat = lambert(SCENE.crowd);
+    const mat = lambert(color);
     for (let k = 0; k < 6; k++) {
       const a = (k / 6) * Math.PI * 2;
       const r = k === 0 ? 0 : c.radius * 0.45;
@@ -389,6 +391,14 @@ class CrowdMarker {
       );
       person.position.set(Math.cos(a) * r, 0.35, Math.sin(a) * r);
       this.group.add(person);
+    }
+    if (c.label) {
+      const el = document.createElement("div");
+      el.className = `crowd-label ${c.source}`;
+      el.textContent = c.label;
+      const label = new CSS2DObject(el);
+      label.position.set(0, 2.2, 0);
+      this.group.add(label);
     }
     this.group.position.set(c.x, ctx.city.heightAt(c.x, c.y) + 0.1, c.y);
   }
@@ -475,7 +485,7 @@ export class ActorLayer {
     const live = new Set(items);
     for (const [k, m] of map) {
       if (!live.has(k)) {
-        this.group.remove(m.group);
+        removeGroup(this.group, m.group);
         map.delete(k);
       }
     }
@@ -492,13 +502,21 @@ export class ActorLayer {
     this.stateRef = state;
     for (const a of this.drones.values()) a.dispose();
     for (const a of this.trucks.values()) a.dispose();
-    for (const m of this.survivors.values()) this.group.remove(m.group);
-    for (const m of this.crowds.values()) this.group.remove(m.group);
+    for (const m of this.survivors.values()) removeGroup(this.group, m.group);
+    for (const m of this.crowds.values()) removeGroup(this.group, m.group);
     this.drones.clear();
     this.trucks.clear();
     this.survivors.clear();
     this.crowds.clear();
   }
+}
+
+/** Remove a marker group, including any HTML labels it carries (CSS2D labels outlive their parent). */
+function removeGroup(parent: THREE.Group, group: THREE.Group) {
+  group.traverse((o) => {
+    if (o instanceof CSS2DObject) o.element.remove();
+  });
+  parent.remove(group);
 }
 
 export type { HeightFn };

@@ -172,6 +172,7 @@ describe("Simulation", () => {
       population: false,
       elevation: false,
       disaster: false,
+      crowds: false,
     };
     const sim = new Simulation(small, cfg({ info, droneCount: 4 }));
     const known0 = sim.state.knowledge.known.reduce((a, b) => a + b, 0);
@@ -236,6 +237,7 @@ describe("Simulation", () => {
               population: on,
               elevation: on,
               disaster: on,
+              crowds: false,
             },
           }),
         );

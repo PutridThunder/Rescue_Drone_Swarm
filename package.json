@@ -10,12 +10,14 @@
     "test": "vitest run",
     "data": "node scripts/fetch-world.mjs",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "intel:places": "node scripts/fetch-places.ts"
   },
   "dependencies": {
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "@types/three": "^0.186.0",
     "pngjs": "^7.0.0",
     "prettier": "^3.9.9",

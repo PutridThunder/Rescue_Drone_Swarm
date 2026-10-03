@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     population: false,
     elevation: false,
     disaster: false,
+    crowds: false,
   },
   scenario: "none",
   tsunamiImpactTime: 60,

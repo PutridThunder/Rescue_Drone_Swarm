@@ -94,6 +94,7 @@ describe("priority", () => {
       population: true,
       elevation: true,
       disaster: true,
+      crowds: false,
     };
     const sim = new Simulation(world, {
       ...structuredClone(DEFAULT_CONFIG),
@@ -128,6 +129,7 @@ describe("priority", () => {
         population: true,
         elevation: true,
         disaster: true,
+        crowds: false,
       },
     });
     sim.updateConfig({

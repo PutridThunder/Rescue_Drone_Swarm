@@ -1,3 +1,5 @@
+import { IntelController } from "./intel/IntelController";
+import type { CrowdPlacement } from "./intel/toCrowds";
 import { loadMap, loadWorld } from "./world/loadWorld";
 import { Renderer } from "./render/Renderer";
 import { UI, type Tool } from "./render/UI";
@@ -19,6 +21,7 @@ async function boot() {
   const renderer = new Renderer(document.getElementById("scene")!, world, map);
   let config: SimConfig = structuredClone(DEFAULT_CONFIG);
   const placements: Placement[] = [];
+  let intelCrowds: CrowdPlacement[] = []; // predicted by crowd intel for the chosen disaster time
   let sim = createSim();
   let speed = 1;
   let tool: Tool = "move";
@@ -27,6 +30,7 @@ async function boot() {
 
   function createSim(): Simulation {
     const s = new Simulation(world, config);
+    for (const c of intelCrowds) s.addCrowd(c.x, c.y, c.opts);
     for (const p of placements) {
       if (p.kind === "survivor") s.addSurvivor(p.x, p.y);
       else s.addCrowd(p.x, p.y);
@@ -96,6 +100,13 @@ async function boot() {
   });
   ui.setRunning(false, false);
   ui.setState(sim.state);
+
+  // Crowd intel: changing the disaster time or searching online re-seeds the mission.
+  await IntelController.create(world, ui.intelSlot, (crowds, report) => {
+    intelCrowds = crowds;
+    restart();
+    if (report.mode === "live") ui.toast(`Crowd intel updated: ${crowds.length} hotspots`);
+  });
 
   // Distinguish clicks from camera drags.
   const canvas = renderer.canvas;

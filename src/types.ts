@@ -73,6 +73,7 @@ export interface InfoModes {
   population: boolean; // population prior available
   elevation: boolean; // elevation known up front
   disaster: boolean; // hazard + urgency available (requires scenario)
+  crowds: boolean; // crowd intel (places, events, social media) used as a prior
 }
 
 export type Scenario = "none" | "tsunami";
@@ -138,6 +139,16 @@ export interface CrowdView {
   y: number;
   radius: number; // cells
   people: number; // added to the population prior
+  source: "user" | "intel"; // planted by the user, or predicted by crowd intel
+  label?: string; // e.g. "Lonsdale Quay · ~820"
+}
+
+export interface CrowdOptions {
+  people?: number;
+  radius?: number; // cells
+  survivors?: number; // people actually there to be found (ground truth)
+  source?: CrowdView["source"];
+  label?: string;
 }
 
 export interface TaskView {
@@ -241,6 +252,6 @@ export interface ISimulation {
   disableDrone(id?: number): number | null; // random active drone if id omitted
   updateConfig(partial: Partial<SimConfig>): void; // weights/info modes apply live; others on reset
   addSurvivor(x: number, y: number): SurvivorView | null; // hidden from the fleet
-  addCrowd(x: number, y: number): CrowdView | null; // population hotspot (prior) + hidden survivors
+  addCrowd(x: number, y: number, opts?: CrowdOptions): CrowdView | null; // population hotspot (prior) + hidden survivors
   removeNear(x: number, y: number, radius: number): number; // removes placed items, returns count
 }

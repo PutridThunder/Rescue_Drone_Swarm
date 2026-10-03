@@ -145,6 +145,11 @@ export class UI {
   // Public API
   // ---------------------------------------------------------------------------
 
+  /** Container where main.ts mounts the crowd intel panel. */
+  get intelSlot(): HTMLElement {
+    return this.q("#intel-slot");
+  }
+
   setRunning(running: boolean, started: boolean) {
     const b = this.q<HTMLButtonElement>("#play");
     b.innerHTML = running
@@ -296,7 +301,9 @@ export class UI {
           ${this.toggle("geography", "Street map", "Buildings and streets known in advance")}
           ${this.toggle("population", "Population", "Where people live, plus crowds you report")}
           ${this.toggle("disaster", "Hazard warning", "Tsunami flood zone and countdown")}
+          ${this.toggle("crowds", "Crowd intel", "Events, busy places and social media")}
         </section>
+        <div id="intel-slot"></div>
         <section>
           <h3>Fleet <em>changes restart the mission</em></h3>
           ${this.stepper("droneCount", "Drones", 1, 12)}

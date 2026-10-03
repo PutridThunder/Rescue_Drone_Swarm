@@ -23,6 +23,7 @@ export const SCENE = {
   survivorFound: 0xf0445a,
   survivorHidden: 0x8e97a6,
   crowd: 0xf29d38,
+  intel: 0x7c5cff, // crowds predicted by crowd intel
 };
 
 // Distinct, saturated-but-friendly drone colours that read on a light map.

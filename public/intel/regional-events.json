@@ -1,0 +1,103 @@
+{
+  "note": "Major regional events outside the map whose crowds ripple into it (offline layer). Add more as needed.",
+  "events": [
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: Australia vs Group D playoff winner",
+      "start": "2026-06-13T21:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: Canada vs Qatar",
+      "start": "2026-06-18T15:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: New Zealand vs Egypt",
+      "start": "2026-06-21T18:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: Switzerland vs Canada",
+      "start": "2026-06-24T12:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: New Zealand vs Belgium",
+      "start": "2026-06-26T20:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: Round of 32 (Match 85)",
+      "start": "2026-07-02T20:00:00-07:00"
+    },
+    {
+      "venue": "BC Place",
+      "lat": 49.2768,
+      "lon": -123.1119,
+      "attendance": 54000,
+      "durationH": 2,
+      "sport": true,
+      "source": {
+        "title": "BC Place: Vancouver final match schedule for the FIFA World Cup 2026",
+        "url": "https://www.bcplace.com/?news=vancouver-final-match-schedule-for-the-fifa-world-cup-2026-now-available"
+      },
+      "name": "FIFA World Cup: Round of 16 (Match 96)",
+      "start": "2026-07-07T13:00:00-07:00"
+    }
+  ]
+}
