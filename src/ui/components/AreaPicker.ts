@@ -157,7 +157,8 @@ export class AreaPicker {
     this.place = place;
     const all = place.parts.flat();
     if (all.length === 1) return void this.pick(all[0]);
-    $(this.menu, ".area-parts-title").textContent = `${place.name} is ${all.length} maps. Pick the part to search, or:`;
+    $(this.menu, ".area-results").innerHTML = ""; // make room for the map of parts
+    $(this.menu, ".area-parts-title").textContent = `${place.label} is ${all.length} maps. Pick the part to search, or:`;
     $(this.menu, ".area-parts").hidden = false;
     // The part containing the place's centre point.
     this.centrePart = all.find((p) => place.lat >= p.bbox[0] && place.lat < p.bbox[2] && place.lon >= p.bbox[1] && place.lon < p.bbox[3]) ?? all[Math.floor(all.length / 2)];

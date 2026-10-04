@@ -24,3 +24,4 @@
 .area-menu.is-busy .area-parts-map, .area-menu.is-busy .area-results { opacity: 0.5; pointer-events: none; }
 .area-list small { margin-left: 4px; color: var(--muted); font-size: 10px; font-weight: 500; }
 .area-parts-centre { margin-bottom: 8px; }
+.area-menu { max-height: calc(100vh - 96px); overflow-y: auto; }
