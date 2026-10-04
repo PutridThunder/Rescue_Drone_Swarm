@@ -1,6 +1,7 @@
 // Shared state handed to every simulation subsystem. The Simulation facade creates one context,
 // then the subsystems, and registers each subsystem here so they can collaborate.
 
+import { searchAreaMask } from "../shared/searchArea";
 import { Terrain } from "../shared/terrain";
 import type { SimConfig, SimState, World } from "../types";
 import type { Drone } from "./drone";
@@ -30,6 +31,8 @@ export class SimContext {
   readonly navBlocked: Uint8Array;
   /** Cells that path planning failed to reach; skipped as sweep targets. */
   readonly unreachable: Uint8Array;
+  /** Cells inside the user's search circle, or null when the whole area is searched. */
+  readonly area: Uint8Array | null;
   readonly knowledge: Knowledge;
   readonly log: EventLog;
   readonly replan = new ReplanScheduler();
@@ -63,6 +66,7 @@ export class SimContext {
     this.masks = buildObstacleMasks(world, cfg.flightAltitudeM);
     this.navBlocked = new Uint8Array(this.N);
     this.unreachable = new Uint8Array(this.N);
+    this.area = searchAreaMask(cfg.searchArea ?? null, this.W, this.H);
     this.knowledge = new Knowledge(this.N);
     this.log = new EventLog(() => this.state.time);
   }
@@ -73,12 +77,17 @@ export class SimContext {
 
   /** Cells the fleet can search at all: land that a sensor can see. */
   isSearchable(i: number): boolean {
-    return this.world.terrain[i] !== Terrain.Water && !this.masks.hidden[i];
+    return this.world.terrain[i] !== Terrain.Water && !this.masks.hidden[i] && this.inArea(i);
+  }
+
+  /** Inside the search circle (always true without one). */
+  inArea(i: number): boolean {
+    return !this.area || this.area[i] === 1;
   }
 
   /** Cells counted toward a block's coverage, given what the fleet currently knows. */
   countsForCoverage(i: number): boolean {
-    return !((this.knowledge.known[i] && this.world.terrain[i] === Terrain.Water) || this.masks.hidden[i]);
+    return this.inArea(i) && !((this.knowledge.known[i] && this.world.terrain[i] === Terrain.Water) || this.masks.hidden[i]);
   }
 
   /** Searchable cells whose centres are within `r` of (x, y). */

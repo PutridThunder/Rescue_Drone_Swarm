@@ -62,7 +62,7 @@ export class Sensor {
       }
       lastObsDrone[i] = d.id;
       lastObsT[i] = t;
-      if (before < SEARCHED_THRESHOLD && after >= SEARCHED_THRESHOLD) {
+      if (before < SEARCHED_THRESHOLD && after >= SEARCHED_THRESHOLD && ctx.inArea(i)) {
         stats.searchedCells++;
         d.cellsSearched++;
         stats.populationReached += ctx.priors.population[i];

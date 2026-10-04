@@ -1,9 +1,11 @@
 // A transparent texture over the terrain (one texel per cell) showing what the fleet knows:
 // fog where nothing is known, a grey veil where unsearched, blue frontier, red hazard, orange
-// population (when that intel is on), and the flood after a tsunami.
+// population (when that intel is on), the flood after a tsunami, and a dark veil outside the
+// drawn search area.
 
 import * as THREE from "three";
 import { Terrain } from "../../../shared/terrain";
+import { searchAreaMask } from "../../../shared/searchArea";
 import type { CrowdView, SimState, World } from "../../../types";
 import { SCENE } from "../palette";
 
@@ -28,6 +30,13 @@ export class KnowledgeOverlay {
   private hazardOn = false;
   private impacted = false;
   private crowdsKey = "";
+  private areaKey = "";
+  private area: Uint8Array | null = null;
+
+  /** Cells inside the drawn search circle (null: no circle). */
+  get areaMask(): Uint8Array | null {
+    return this.area;
+  }
   private readonly texel = { r: 0, g: 0, b: 0, a: 0 };
 
   constructor(
@@ -83,6 +92,14 @@ export class KnowledgeOverlay {
       this.rebuildCrowdBoost(state.crowds);
       changed = true;
     }
+    const area = state.config.searchArea;
+    const areaKey = area ? `${area.x},${area.y},${area.r}` : "";
+    if (areaKey !== this.areaKey) {
+      const { width: W, height: H } = this.world.meta;
+      this.area = searchAreaMask(area, W, H);
+      this.areaKey = areaKey;
+      changed = true;
+    }
     this.knowledgeRef = k;
     this.populationOn = populationOn;
     this.hazardOn = hazardOn;
@@ -107,7 +124,9 @@ export class KnowledgeOverlay {
   private paint(i: number, state: SimState) {
     const k = state.knowledge;
     this.texel.r = this.texel.g = this.texel.b = this.texel.a = 0;
-    if (this.world.terrain[i] !== Terrain.Water) {
+    if (this.area && !this.area[i]) {
+      this.blend(SCENE.outsideArea, 1);
+    } else if (this.world.terrain[i] !== Terrain.Water) {
       const unsearched = Math.max(0, 1 - k.searched[i] / SEARCHED);
       if (!k.known[i]) this.blend(SCENE.fogUnknown, 1);
       else this.blend(SCENE.fogUnsearched, unsearched);

@@ -7,6 +7,8 @@
 // ---------------------------------------------------------------------------
 
 export { Terrain, type TerrainCode } from "./shared/terrain";
+export type { SearchArea } from "./shared/searchArea";
+import type { SearchArea } from "./shared/searchArea";
 
 export interface WorldMeta {
   name: string;
@@ -100,6 +102,8 @@ export interface SimConfig {
   tsunamiImpactTime: number; // simulated seconds until the wave arrives
   tsunamiRunupM: number; // elevation below which cells flood on impact
   weights: Weights;
+  /** Only search inside this circle (drawn on the map); null searches the whole area. */
+  searchArea: SearchArea | null;
 }
 
 // ---------------------------------------------------------------------------

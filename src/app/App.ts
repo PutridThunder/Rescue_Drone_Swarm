@@ -91,7 +91,12 @@ export async function startApp() {
   hud.setState(runner.sim.state);
 
   const droneCam = new DroneCamController(hud.el, renderer, hud, () => runner.sim.state);
-  const tools = new MapTools(world, renderer, runner, hud, droneCam);
+  const tools = new MapTools(world, renderer, runner, hud, droneCam, (area) => {
+    runner.configure({ searchArea: area });
+    restart();
+    const km = (r: number) => ((r * world.meta.cellSizeM) / 1000).toFixed(2);
+    hud.toast(area ? `Search area set: ${km(area.r)} km radius. Survivors are somewhere inside.` : "Searching the whole map again");
+  });
   const challenge = new ChallengeController(runner, droneCam, hud, restart);
 
   const picker = new AreaPicker(hud.brand.areaButton, areas, areaId, {

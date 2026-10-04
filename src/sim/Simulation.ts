@@ -38,7 +38,7 @@ export class Simulation implements ISimulation {
     const ctx = (this.ctx = new SimContext(world, structuredClone(config), new Rng(cfg.seed)));
 
     ctx.tsunami = new Tsunami(ctx);
-    const searchable = Uint8Array.from(ctx.masks.hidden, (h) => (h ? 0 : 1));
+    const searchable = Uint8Array.from(ctx.masks.hidden, (h, i) => (h || !ctx.inArea(i) ? 0 : 1));
     const survivors = sampleSurvivors(world, cfg.survivorCount, ctx.rng, ctx.tsunami.hazardTruth, searchable);
     ctx.survivors = new SurvivorRegistry(ctx, survivors);
     ctx.priors = new PopulationPriors(ctx);

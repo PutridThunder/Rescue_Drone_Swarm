@@ -7,6 +7,7 @@ const ICONS = {
   move: '<path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>',
   survivor: '<circle cx="12" cy="6" r="3"/><path d="M7 21v-6l-2-1 2-5h10l2 5-2 1v6h-3v-5h-4v5z"/>',
   crowd: '<circle cx="8" cy="7" r="2.5"/><circle cx="16" cy="7" r="2.5"/><path d="M3 19v-4l1.5-4h7L13 15v4zM11 19v-4l1.5-4h7L21 15v4z"/>',
+  area: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-dasharray="3 2.5"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>',
   erase: '<path d="M5 15l8-8 6 6-6 6H8zM10 19h10" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>',
   bolt: '<path d="M13 2L5 14h6l-1 8 8-12h-6z"/>',
   map: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z M9 4v14 M15 6v14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>',

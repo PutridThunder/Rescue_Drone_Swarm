@@ -4,10 +4,11 @@ import { delegate, h } from "../dom";
 import { icon, type IconName } from "../icons";
 import "./Toolbar.css";
 
-export type Tool = "move" | "survivor" | "crowd" | "erase" | "fail";
+export type Tool = "move" | "area" | "survivor" | "crowd" | "erase" | "fail";
 
 const TOOLS: { id: Tool; label: string; icon: IconName; hint: string }[] = [
   { id: "move", label: "Explore", icon: "move", hint: "Drag to pan, scroll to zoom. Click a street to see it on Google Maps, or click a drone to follow it." },
+  { id: "area", label: "Search area", icon: "area", hint: "Drag from the centre outwards to draw the circle to search. Click once to search everywhere again." },
   { id: "survivor", label: "Survivor", icon: "survivor", hint: "Click to hide a survivor. The drones don’t know where they are and have to find them." },
   { id: "crowd", label: "Crowd", icon: "crowd", hint: "Click to report a crowd. With Population intel on, drones prioritise it; a few people are really there." },
   { id: "erase", label: "Erase", icon: "erase", hint: "Click near a survivor or crowd you placed to remove it." },

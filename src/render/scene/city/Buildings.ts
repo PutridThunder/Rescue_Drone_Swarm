@@ -24,6 +24,8 @@ export class Buildings {
   private readonly byCell = new Map<number, number[]>();
   private readonly colors: THREE.BufferAttribute;
   private readonly dirty = new Set<number>();
+  /** Cells inside the search circle (null: no circle); buildings outside are drawn dimmed. */
+  areaMask: Uint8Array | null = null;
 
   constructor(map: MapJSON, heights: HeightField) {
     const positions: number[] = [];
@@ -83,6 +85,7 @@ export class Buildings {
     const done = new THREE.Color(SCENE.buildingSearched);
     const tall = new THREE.Color(SCENE.buildingTall);
     const danger = new THREE.Color(SCENE.buildingHazard);
+    const outside = new THREE.Color(SCENE.buildingOutsideArea);
     const c = new THREE.Color();
     let lo = Infinity;
     let hi = -Infinity;
@@ -97,6 +100,7 @@ export class Buildings {
       progress /= r.cells.length;
       c.copy(r.heightM > state.config.flightAltitudeM ? tall : unsearched).lerp(done, progress * progress);
       if (hz > HAZARD_TINT) c.lerp(danger, hz * (1 - progress) * 0.8);
+      if (this.areaMask && !this.areaMask[r.cells[0]]) c.copy(outside);
       const R = Math.round(c.r * 255);
       const G = Math.round(c.g * 255);
       const B = Math.round(c.b * 255);

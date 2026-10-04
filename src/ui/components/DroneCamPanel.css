@@ -49,3 +49,9 @@
 .dronecam.full::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.35); }
 .dronecam.full[data-mode="map"]::after { display: none; }
 .dronecam.full.thermal::before { content: ""; position: absolute; inset: 0; backdrop-filter: grayscale(1) contrast(1.6) brightness(0.9) sepia(1) hue-rotate(-50deg) saturate(4); pointer-events: none; }
+
+/* Window mode: the buttons stay on one line; the target label gives way. */
+.dronecam:not(.full) .dronecam-buttons button { padding: 4px 6px; white-space: nowrap; }
+.dronecam:not(.full) .dronecam-target { max-width: 30%; }
+.dronecam:not(.full) [data-action="thermal"] { font-size: 0; }
+.dronecam:not(.full) [data-action="thermal"]::after { content: "IR"; font-size: 11px; }

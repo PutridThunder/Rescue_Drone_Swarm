@@ -30,4 +30,5 @@ export const DEFAULT_CONFIG: SimConfig = {
   tsunamiImpactTime: 60,
   tsunamiRunupM: 12,
   weights: DEFAULT_WEIGHTS,
+  searchArea: null,
 };

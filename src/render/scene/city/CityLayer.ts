@@ -9,6 +9,8 @@ import { HeightField } from "./HeightField";
 import { KnowledgeOverlay } from "./KnowledgeOverlay";
 import { buildRoads } from "./roads";
 import { SatelliteGround } from "./SatelliteGround";
+import { SearchAreaRing } from "./SearchAreaRing";
+import type { SearchArea } from "../../../shared/searchArea";
 import { StreetLabels } from "./StreetLabels";
 import { buildTerrainMesh } from "./terrain";
 import { buildTrees } from "./trees";
@@ -26,6 +28,8 @@ export class CityLayer {
   private readonly labels: StreetLabels | null = null;
   private readonly roads: THREE.Mesh | null = null;
   private readonly satellite: SatelliteGround | null;
+  private readonly ring: SearchAreaRing;
+  private preview: SearchArea | null = null;
 
   constructor(world: World, map: MapJSON | null) {
     this.heights = new HeightField(world);
@@ -35,6 +39,8 @@ export class CityLayer {
     this.overlay = new KnowledgeOverlay(world, terrain.geometry);
     this.group.add(terrain, this.overlay.mesh, buildBackdrop(world), buildTrees(world, this.heights));
     this.pickables.push(terrain);
+    this.ring = new SearchAreaRing(this.heights);
+    this.group.add(this.ring.mesh);
     this.satellite = world.eo?.satelliteUrl ? new SatelliteGround(terrain, world.eo.satelliteUrl) : null;
 
     if (map) {
@@ -62,10 +68,18 @@ export class CityLayer {
     this.labels?.setVisible(visible);
   }
 
+  /** Show a circle being drawn (null: back to the mission's search area). */
+  previewSearchArea(area: SearchArea | null) {
+    this.preview = area;
+  }
+
   /** Repaint what changed in the fleet's knowledge since the last frame. */
   update(state: SimState, dirtyCells: number[], dt: number) {
+    if (this.preview) this.ring.set(this.preview, true);
+    else this.ring.set(state.config.searchArea);
     const repaintedAll = this.overlay.update(state, dirtyCells, dt);
     if (!this.buildings) return;
+    this.buildings.areaMask = this.overlay.areaMask;
     if (repaintedAll) this.buildings.invalidateAll();
     else for (const i of dirtyCells) this.buildings.invalidateCell(i);
     this.buildings.repaint(state);

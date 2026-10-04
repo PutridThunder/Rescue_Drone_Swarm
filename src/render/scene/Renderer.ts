@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import { CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import type { MapJSON, SimState, World } from "../../types";
+import type { MapJSON, SearchArea, SimState, World } from "../../types";
 import { ActorLayer } from "./actors/ActorLayer";
 import { CameraRig } from "./CameraRig";
 import { CityLayer } from "./city/CityLayer";
@@ -110,6 +110,17 @@ export class Renderer {
     if (this.camDrone !== null && this.camCanvas) this.droneCam.renderTo(this.renderer, this.scene, this.camCanvas);
     this.renderer.render(this.scene, this.rig.camera);
     this.labelRenderer.render(this.scene, this.rig.camera);
+  }
+
+  /** Outline of a search circle being drawn (null: show the mission's own). */
+  previewSearchArea(area: SearchArea | null) {
+    this.city.previewSearchArea(area);
+  }
+
+  /** Freeze map panning and rotation (zoom still works), e.g. while drawing on the map. */
+  setCameraLocked(locked: boolean) {
+    this.rig.controls.enablePan = !locked;
+    this.rig.controls.enableRotate = !locked;
   }
 
   /** Drone cam style: out of the gimbal or following behind. */
