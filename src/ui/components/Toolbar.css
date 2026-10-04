@@ -1,0 +1,14 @@
+.toolbar { position: absolute; bottom: var(--gutter); left: 50%; transform: translateX(-50%); display: flex; gap: 4px; padding: 6px; }
+.tool { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 74px; padding: 8px 4px 6px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+.tool:hover { background: var(--surface); color: var(--text); }
+.tool.active { background: var(--accent-soft); color: var(--accent); }
+.tool[data-tool="fail"].active { background: var(--danger-soft); color: var(--danger); }
+.tool-hint {
+  position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); max-width: 520px; padding: 6px 12px;
+  border-radius: 999px; background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(6px);
+  color: var(--muted); font-size: 12px; text-align: center; pointer-events: none;
+}
+@media (max-width: 1100px) {
+  .tool { width: 60px; }
+  .tool span { font-size: 10px; }
+}

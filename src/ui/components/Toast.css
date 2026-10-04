@@ -1,0 +1,2 @@
+.toast { position: absolute; top: 72px; left: 50%; z-index: 40; padding: 8px 14px; border-radius: 999px; background: var(--text); color: #fff; font-size: 12px; font-weight: 600; opacity: 0; transform: translate(-50%, -8px); transition: opacity 0.2s, transform 0.2s; pointer-events: none; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }

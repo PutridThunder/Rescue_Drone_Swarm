@@ -1,0 +1,8 @@
+.modal { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(238, 241, 245, 0.55); backdrop-filter: blur(3px); }
+.modal .card { width: 440px; padding: 24px; }
+.modal h2 { margin-bottom: 16px; font-size: 20px; }
+.results-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.results-grid div { padding: 12px; border-radius: var(--radius-sm); background: var(--surface); }
+.results-grid b { display: block; font-size: 20px; }
+.results-grid span { color: var(--muted); font-size: 11px; font-weight: 600; }
+.results-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }

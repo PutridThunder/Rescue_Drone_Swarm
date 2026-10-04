@@ -1,0 +1,11 @@
+/* HTML labels drawn over the 3D scene (CSS2DRenderer). */
+.label-layer { position: absolute; inset: 0; pointer-events: none; }
+.street-label {
+  color: #5d6678; font: 600 11px/1 Inter, system-ui, sans-serif; letter-spacing: 0.01em; white-space: nowrap;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 6px #fff; pointer-events: none;
+}
+.crowd-label {
+  padding: 3px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 1px 4px rgba(20, 30, 50, 0.15);
+  font: 600 11px/1.2 Inter, system-ui, sans-serif; white-space: nowrap; pointer-events: none;
+}
+.crowd-label.intel { color: var(--intel); }

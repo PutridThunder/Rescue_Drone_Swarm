@@ -1,0 +1,46 @@
+/* Phones: map first; the side panels become bottom sheets chosen from the tab bar. */
+@media (max-width: 760px) {
+  .brand { top: calc(8px + env(safe-area-inset-top)); left: 8px; right: 8px; width: auto; padding: 8px 10px 8px 8px; }
+  .brand h1 { font-size: 13px; }
+
+  .transport { top: calc(64px + env(safe-area-inset-top)); left: 8px; right: 8px; transform: none; justify-content: space-between; padding: 4px; }
+  .transport-play { flex: 1; min-width: 0; }
+  .transport .seg button { padding: 0 7px; }
+  .transport-clock { padding: 0 4px; }
+  .transport-cam { width: 36px; padding: 0; justify-content: center; }
+  .transport-cam span { display: none; }
+  .transport-tsunami { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); }
+
+  .panel-left, .panel-right {
+    display: none; top: auto; left: 0; right: 0; bottom: calc(56px + env(safe-area-inset-bottom));
+    width: auto; max-height: 62vh; border-radius: 16px 16px 0 0; z-index: 15;
+    transform: none !important; opacity: 1 !important; pointer-events: auto !important;
+    animation: sheet-up 0.22s ease-out;
+  }
+  body[data-sheet="setup"] .panel-left,
+  body[data-sheet="live"] .panel-right { display: flex; }
+  .panel-collapse, .panel-tab { display: none !important; }
+  .feed-section { min-height: 200px; }
+
+  .legend, .tool-hint { display: none; }
+  .toolbar { bottom: calc(64px + env(safe-area-inset-bottom)); left: 8px; right: 8px; transform: none; justify-content: space-between; padding: 4px; }
+  .tool { flex: 1; width: auto; padding: 6px 2px; font-size: 10px; }
+  body[data-sheet="setup"] .toolbar,
+  body[data-sheet="live"] .toolbar { display: none; }
+
+  .mobile-tabs {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 16; display: flex; gap: 6px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel);
+  }
+  .mobile-tabs button { flex: 1; height: 40px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--muted); font-weight: 700; }
+  .mobile-tabs button.on { background: var(--accent-soft); color: var(--accent); }
+
+  .dronecam { top: calc(112px + env(safe-area-inset-top)); right: 8px; width: 46vw; height: 28vw; min-height: 110px; }
+  .dronecam [data-telemetry], .dronecam-target { display: none; }
+  .place { left: 8px !important; right: 8px; top: auto !important; bottom: calc(130px + env(safe-area-inset-bottom)); width: auto; }
+  .modal .card { width: calc(100vw - 32px); padding: 18px; }
+  .results-grid { grid-template-columns: repeat(2, 1fr); }
+  .area-menu { left: 0; right: 0; }
+  .street-label { font-size: 10px; }
+}
+@keyframes sheet-up { from { transform: translateY(24px); } }

@@ -1,0 +1,8 @@
+.area-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: 100%; padding: 12px 14px; }
+.area-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.area-list button { padding: 7px 8px; border: 0; border-radius: 8px; background: none; text-align: left; font-weight: 600; cursor: pointer; }
+.area-list button:hover { background: var(--surface); }
+.area-list button.on { background: var(--accent-soft); color: var(--accent); }
+.area-import { display: flex; gap: 6px; }
+.area-import input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
+.area-status { min-height: 1em; margin-top: 8px; color: var(--muted); font-size: 12px; }

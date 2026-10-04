@@ -1,0 +1,15 @@
+.intel-time { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.intel-time input { padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: inherit; }
+.intel-shortcuts { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+.intel-shortcuts button { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+.intel-shortcuts button:hover { border-color: var(--intel); color: var(--intel); }
+.intel-summary { margin: 8px 0 4px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.intel-hotspots { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.intel-hotspots li { padding: 7px 9px; border-radius: 8px; background: var(--intel-soft); }
+.intel-row { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.intel-row span { color: var(--intel); font-weight: 700; white-space: nowrap; }
+.intel-hotspots small { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.intel-confidence { height: 3px; margin-top: 4px; overflow: hidden; border-radius: 99px; background: #e4def9; }
+.intel-confidence i { display: block; height: 100%; background: var(--intel); }
+.intel-links { display: flex; gap: 8px; margin-top: 3px; }
+.intel-links a { color: var(--intel); font-size: 11px; text-decoration: none; }

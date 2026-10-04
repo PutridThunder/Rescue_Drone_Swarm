@@ -1,0 +1,9 @@
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface); }
+.stat.wide { grid-column: span 2; }
+.stat > span { display: block; color: var(--muted); font-size: 11px; font-weight: 600; }
+.stat b { display: block; margin-top: 2px; font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat b small { margin-left: 3px; color: var(--faint); font-size: 13px; }
+.stat .bar { height: 6px; margin-top: 8px; overflow: hidden; border-radius: 99px; background: var(--track); }
+.stat .bar i { display: block; height: 100%; border-radius: 99px; background: var(--accent); transition: width 0.3s; }
+.stat-lost b { color: var(--danger); }

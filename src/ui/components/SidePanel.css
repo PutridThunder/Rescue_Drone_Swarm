@@ -1,0 +1,38 @@
+.panel {
+  position: absolute; display: flex; flex-direction: column;
+  transition: transform 0.35s var(--ease), opacity 0.35s var(--ease);
+}
+.panel-body { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; flex: 1; border-radius: inherit; }
+.panel-body > section, .panel-body > details { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.panel-body > section:last-child, .panel-body > details:last-child { border-bottom: 0; }
+
+.panel-left { top: calc(var(--gutter) + var(--header-h)); left: var(--gutter); width: var(--panel-left); max-height: calc(100vh - var(--header-h) - var(--legend-h) - var(--gutter)); }
+.panel-right { top: var(--gutter); right: var(--gutter); bottom: var(--gutter); width: var(--panel-right); }
+
+/* Slide out of view; the edge tab brings it back. */
+.panel-left.collapsed { transform: translateX(calc(-100% - var(--gutter) - 8px)); opacity: 0; pointer-events: none; }
+.panel-right.collapsed { transform: translateX(calc(100% + var(--gutter) + 8px)); opacity: 0; pointer-events: none; }
+
+.panel-collapse {
+  position: absolute; top: 18px; z-index: 2; display: grid; place-items: center; width: 26px; height: 26px;
+  border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--muted);
+  box-shadow: var(--shadow); cursor: pointer;
+}
+.panel-collapse:hover { color: var(--accent); }
+/* A round handle on the panel's inner edge (toward the map). */
+.panel-left .panel-collapse { right: -13px; }
+.panel-right .panel-collapse { left: -13px; }
+
+.panel-tab {
+  position: absolute; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px;
+  color: var(--muted); font-size: 12px; font-weight: 700; cursor: pointer;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s var(--ease), transform 0.35s var(--ease);
+}
+.panel-tab:hover { color: var(--text); }
+.panel-tab.shown { opacity: 1; pointer-events: auto; transform: none; }
+.panel-tab-left { top: calc(var(--gutter) + var(--header-h)); left: var(--gutter); transform: translateX(-12px); }
+.panel-tab-right { top: var(--gutter); right: var(--gutter); flex-direction: row-reverse; transform: translateX(12px); }
+
+@media (max-width: 1100px) {
+  :root { --panel-left: 260px; --panel-right: 280px; }
+}

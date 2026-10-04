@@ -34,3 +34,11 @@ export function openArea(id: string) {
   url.searchParams.set("area", id);
   location.href = url.toString();
 }
+
+/** Ask the dev server to build a new area from a place name. Resolves to the new area's id. */
+export async function importArea(query: string): Promise<string> {
+  const res = await fetch("/api/areas", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+  const json = (await res.json().catch(() => ({}))) as { id?: string; error?: string };
+  if (!res.ok || !json.id) throw new Error(json.error ?? `HTTP ${res.status}`);
+  return json.id;
+}

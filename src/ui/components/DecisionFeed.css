@@ -1,0 +1,12 @@
+.feed-section { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.feed { display: flex; flex-direction: column; gap: 2px; margin: 0 -6px; padding: 0 6px; overflow-y: auto; }
+.feed-row { display: flex; gap: 10px; padding: 7px 4px; border-radius: 8px; animation: feed-in 0.3s; }
+.feed-row .dot { margin-top: 4px; }
+.feed-row p { font-size: 12.5px; line-height: 1.35; }
+.feed-row time { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.feed-survivor { background: #fff1f3; }
+.feed-failure { background: var(--danger-soft); }
+.feed-impact { background: var(--water-soft); }
+.feed-complete { background: #e9f8f2; }
+.feed-truck .dot { background: var(--warn); }
+@keyframes feed-in { from { opacity: 0; transform: translateY(-4px); } }

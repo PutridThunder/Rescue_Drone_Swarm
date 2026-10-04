@@ -1,0 +1,6 @@
+.place { position: absolute; z-index: 5; width: 248px; padding: 12px 14px; }
+.place-pin { margin-bottom: 4px; color: var(--danger); }
+.place h4 { margin: 0; font-size: 14px; }
+.place small { color: var(--muted); font-variant-numeric: tabular-nums; }
+.place-links { display: flex; gap: 6px; margin-top: 10px; }
+.place-close { position: absolute; top: 8px; right: 8px; border: 0; background: transparent; color: var(--faint); cursor: pointer; }

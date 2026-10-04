@@ -1,0 +1,30 @@
+.dronecam {
+  --drone: var(--accent);
+  position: absolute; top: 80px; right: calc(var(--panel-right) + 2 * var(--gutter)); z-index: 8;
+  width: 360px; height: 225px; overflow: hidden;
+  border: 2px solid var(--drone); border-radius: 12px; background: #1d2430; box-shadow: var(--shadow);
+  color: #fff; font: 600 11px/1 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.04em;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.dronecam.dragging { cursor: grabbing; box-shadow: var(--shadow-lift); }
+.dronecam-view { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.dronecam.thermal .dronecam-view { filter: grayscale(1) contrast(1.6) brightness(0.9) sepia(1) hue-rotate(-50deg) saturate(4); }
+.dronecam-lost { position: absolute; inset: 0; display: none; place-items: center; background: repeating-linear-gradient(0deg, #1d2430 0 2px, #2b3445 2px 4px); font-size: 16px; letter-spacing: 0.2em; }
+.dronecam.lost .dronecam-lost { display: grid; }
+
+.dronecam-top, .dronecam-bottom { position: absolute; left: 8px; right: 8px; display: flex; justify-content: space-between; align-items: center; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7); }
+.dronecam-top { top: 8px; }
+.dronecam-bottom { bottom: 8px; }
+.dronecam-badge { display: flex; gap: 5px; align-items: center; padding: 4px 7px; border-radius: 6px; background: rgba(0, 0, 0, 0.45); }
+.dronecam-badge > i { width: 7px; height: 7px; border-radius: 50%; background: #ff4d4f; animation: pulse 1.2s infinite; }
+.dronecam-badge b { color: var(--drone); filter: brightness(1.4); }
+.dronecam-target { display: block; max-width: 55%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dronecam-target:empty { display: none; }
+.dronecam-buttons { display: flex; gap: 4px; }
+.dronecam-buttons button { padding: 4px 7px; border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 6px; background: rgba(0, 0, 0, 0.5); color: #fff; font: inherit; cursor: pointer; }
+.dronecam-buttons button.on { background: #e8590c; border-color: #e8590c; }
+
+.dronecam-crosshair { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; border: 1.5px solid rgba(255, 255, 255, 0.8); border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.dronecam-crosshair::before, .dronecam-crosshair::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.8); }
+.dronecam-crosshair::before { left: 50%; top: -8px; bottom: -8px; width: 1.5px; transform: translateX(-50%); }
+.dronecam-crosshair::after { top: 50%; left: -8px; right: -8px; height: 1.5px; transform: translateY(-50%); }

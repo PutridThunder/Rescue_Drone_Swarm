@@ -39,3 +39,25 @@ export function droneColor(id: number): number {
 export function droneColorCss(id: number): string {
   return `#${droneColor(id).toString(16).padStart(6, "0")}`;
 }
+
+const hex = (c: number) => `#${c.toString(16).padStart(6, "0")}`;
+
+/** Mix two colours (t = 0 -> a, 1 -> b). */
+function mix(a: number, b: number, t: number): number {
+  const ch = (shift: number) => Math.round(((a >> shift) & 255) * (1 - t) + ((b >> shift) & 255) * t);
+  return (ch(16) << 16) | (ch(8) << 8) | ch(0);
+}
+
+/** Publish map colours as CSS variables so the legend always matches the 3D scene. */
+export function applyPaletteToCss(root: HTMLElement = document.documentElement) {
+  const vars: Record<string, number> = {
+    "--map-unsearched": SCENE.buildingUnsearched,
+    "--map-searched": SCENE.buildingSearched,
+    "--map-frontier": mix(SCENE.ground, SCENE.frontier[0], 0.6),
+    "--map-tall": SCENE.buildingTall,
+    "--map-survivor": SCENE.survivorFound,
+    "--map-truck": SCENE.truckAccent,
+    "--intel": SCENE.intel,
+  };
+  for (const [name, color] of Object.entries(vars)) root.style.setProperty(name, hex(color));
+}

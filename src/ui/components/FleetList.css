@@ -1,0 +1,10 @@
+.fleet { display: flex; flex-direction: column; gap: 2px; }
+.fleet-row { display: grid; grid-template-columns: 10px 28px 1fr 46px; gap: 8px; align-items: center; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; }
+.fleet-row:hover { background: var(--surface); }
+.fleet-row.following { background: var(--accent-soft); }
+.fleet-row.down { opacity: 0.5; }
+.fleet-status { overflow: hidden; color: var(--muted); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.fleet-battery { height: 6px; overflow: hidden; border-radius: 99px; background: var(--track); }
+.fleet-battery i { display: block; height: 100%; background: var(--ok); }
+.fleet-row.low .fleet-battery i { background: var(--warn); }
+.fleet-row.down .fleet-battery i { background: var(--faint); }

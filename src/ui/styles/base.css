@@ -1,0 +1,89 @@
+/* Page, typography and shared controls (cards, buttons, segmented controls, switches, sliders). */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+h1, h2, h3, h4, p { margin: 0; }
+button { font: inherit; color: inherit; }
+
+#scene { position: fixed; inset: 0; }
+#scene canvas { display: block; }
+body[data-tool="survivor"] #scene canvas,
+body[data-tool="crowd"] #scene canvas { cursor: copy; }
+body[data-tool="erase"] #scene canvas,
+body[data-tool="fail"] #scene canvas { cursor: crosshair; }
+
+.hud { position: fixed; inset: 0; pointer-events: none; font-size: 13px; }
+.hud > * { pointer-events: auto; }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+h3 { display: flex; gap: 6px; align-items: baseline; margin-bottom: 10px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+h3 em { font-style: normal; font-weight: 500; text-transform: none; letter-spacing: 0; color: var(--faint); }
+h4 { margin: 14px 0 6px; font-size: 12px; font-weight: 600; }
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel);
+  color: var(--text); font-weight: 600; text-decoration: none; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn:hover { background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-strong); }
+.btn.icon { width: 36px; padding: 0; justify-content: center; }
+.btn.small { height: 30px; padding: 0 10px; font-size: 12px; }
+
+/* Segmented control */
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: var(--radius-sm); background: var(--surface-strong); }
+.seg button { height: 30px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-weight: 600; cursor: pointer; }
+.seg button.on { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgba(20, 30, 50, 0.12); }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg.wide { display: flex; }
+.seg.wide button { flex: 1; }
+
+/* Status chip */
+.chip { display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.chip.danger { background: var(--danger-soft); color: var(--danger); animation: pulse 1.6s ease-in-out infinite; }
+.chip.danger.hit { background: var(--water-soft); color: #2f6fb0; animation: none; }
+@keyframes pulse { 50% { opacity: 0.6; } }
+
+/* Toggle switch: <label class="switch"><input type="checkbox"><i></i><div><b/><span/></div></label> */
+.switch { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0; cursor: pointer; }
+.switch input { display: none; }
+.switch > i { position: relative; flex: none; width: 34px; height: 20px; margin-top: 1px; border-radius: 999px; background: #d6dbe3; transition: background 0.15s; }
+.switch > i::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.15s; }
+.switch input:checked + i { background: var(--accent); }
+.switch input:checked + i::after { transform: translateX(14px); }
+.switch b { display: block; font-weight: 600; }
+.switch span { display: block; font-size: 12px; color: var(--muted); }
+.switch.disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Checkbox row */
+.check { display: flex; gap: 6px; align-items: center; font-size: 12px; cursor: pointer; }
+.check input { margin: 0; accent-color: var(--accent); }
+
+/* Sliders and steppers */
+.slider { display: grid; grid-template-columns: 110px 1fr 46px; gap: 8px; align-items: center; padding: 3px 0; font-size: 12px; }
+.slider output { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.stepper { display: flex; gap: 6px; align-items: center; padding: 4px 0; }
+.stepper span { flex: 1; }
+.stepper button { width: 28px; height: 28px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 16px; line-height: 1; cursor: pointer; }
+.stepper button:hover { background: var(--surface); }
+.stepper output { width: 28px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Disclosure */
+details summary { list-style: none; color: var(--muted); font-weight: 600; cursor: pointer; }
+details summary::before { content: "▸ "; }
+details[open] summary::before { content: "▾ "; }
+details[open] summary { margin-bottom: 8px; }
+
+/* Coloured dot (drone colour) */
+.dot { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--faint); }
+
+[hidden] { display: none !important; }
+
+/* Startup failure message */
+.startup-error { position: fixed; top: 50%; left: 50%; z-index: 100; max-width: 420px; padding: 20px 24px; transform: translate(-50%, -50%); }
+.startup-error h2 { margin-bottom: 8px; font-size: 16px; }
+.startup-error p { color: var(--muted); }

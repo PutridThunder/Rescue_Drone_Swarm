@@ -1,0 +1,2 @@
+.setup-intel:empty { display: none; }
+.setup-intel > section { padding: 14px 16px; border-bottom: 1px solid var(--line); }
