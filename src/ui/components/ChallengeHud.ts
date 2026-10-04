@@ -37,7 +37,7 @@ export class ChallengeHud {
       `<div class="challenge-board">
          <div class="challenge-side human"><span>You</span><b data-score="human">0</b><small data-area="human"></small></div>
          <div class="challenge-clock"><b data-clock>2:30</b><small data-left></small></div>
-         <div class="challenge-side ai"><span>Algorithm</span><b data-score="ai">0</b><small data-area="ai"></small></div>
+         <div class="challenge-side ai"><span>Swarm · 6 drones</span><b data-score="ai">0</b><small data-area="ai"></small></div>
        </div>
        <div class="challenge-help"><kbd>W</kbd><kbd>S</kbd> fly · <kbd>A</kbd><kbd>D</kbd> turn · <kbd>V</kbd> camera · <kbd>Esc</kbd> quit · hover over the truck to recharge</div>
        <div class="challenge-count" hidden></div>
@@ -90,13 +90,13 @@ export class ChallengeHud {
     const winner = challengeWinner(s);
     const humanWins = winner === "human";
     const tie = winner === "tie";
-    const title = tie ? "It's a tie" : humanWins ? "You beat the algorithm!" : "The algorithm wins";
+    const title = tie ? "It's a tie" : humanWins ? "You beat the swarm!" : "The swarm wins";
     const why = humanWins
-      ? "Nice flying. Now imagine six of you, never tired, coordinating every second."
-      : "It never wastes a pass: lanes sized to its camera, finishing each block before moving on, and a planner that always knows what is left.";
+      ? "Nice flying! The swarm never tires, though, and covers a city block every few seconds."
+      : "Six drones share one map: census and crowd data send them where people are, and no block is searched twice.";
     this.result.innerHTML = `<h2>${title}</h2>
       <table>
-        <tr><th></th><th>You</th><th>Algorithm</th></tr>
+        <tr><th></th><th>You</th><th>Swarm (6)</th></tr>
         <tr><td>Survivors found</td><td>${human.found}</td><td>${ai.found}</td></tr>
         <tr><td>Area searched</td><td>${human.hectares.toFixed(1)} ha</td><td>${ai.hectares.toFixed(1)} ha</td></tr>
       </table>

@@ -1,6 +1,7 @@
-// Challenge mode: one drone flown by the player (WASD / arrow keys / touch pad) against one drone
-// flown by the algorithm. Same truck, speed, camera, battery and survivors; most survivors found
-// in the time limit wins (area searched breaks a tie). Runs full screen, third person.
+// Challenge mode: one drone flown by the player (WASD / arrow keys / touch pad) against the
+// algorithm's swarm of six. Every drone has the same speed, camera and battery, and they share
+// the trucks and survivors; most survivors found in the time limit wins (area searched breaks a
+// tie). Runs full screen, third person.
 
 import type { SimConfig } from "../types";
 import { challengeWinner, ChallengeHud, type ChallengeScore } from "../ui/components/ChallengeHud";
@@ -9,9 +10,9 @@ import type { DroneCamController } from "./DroneCamController";
 import type { MissionRunner } from "./MissionRunner";
 
 const MATCH_S = 150;
-const AI_DRONE = 1;
-const HUMAN_DRONE = 2;
-const SETUP: Partial<SimConfig> = { droneCount: 2, truckCount: 1, survivorCount: 20, scenario: "none" };
+const SWARM = 6; // the algorithm's drones (ids 1-6)
+const HUMAN_DRONE = SWARM + 1; // the player's drone
+const SETUP: Partial<SimConfig> = { droneCount: SWARM + 1, truckCount: 2, survivorCount: 20, scenario: "none" };
 const COUNTDOWN = ["3", "2", "1", "GO"];
 const KEYS: Record<string, "w" | "a" | "s" | "d"> = { w: "w", a: "a", s: "s", d: "d", arrowup: "w", arrowleft: "a", arrowdown: "s", arrowright: "d" };
 
@@ -54,7 +55,7 @@ export class ChallengeController {
     this.held.clear();
     // The algorithm uses the population map and crowd intel (people are where they live and
     // gather); the player sees both on the map too.
-    this.runner.configure({ ...SETUP, info: { ...this.runner.config.info, population: true, crowds: true }, seed: Math.floor(Math.random() * 1e9) });
+    this.runner.configure({ ...SETUP, info: { geography: true, population: true, crowds: true, disaster: true, elevation: true }, seed: Math.floor(Math.random() * 1e9) });
     this.runner.speed = 1;
     this.restart();
     this.runner.sim.takeManualControl(HUMAN_DRONE);
@@ -118,11 +119,13 @@ export class ChallengeController {
   private score(): ChallengeScore {
     const st = this.runner.sim.state;
     const cellHa = this.cellAreaHa();
-    const found = (id: number) => st.survivors.filter((s) => s.found && s.foundBy === id).length;
-    const area = (id: number) => (st.drones.find((d) => d.id === id)?.cellsSearched ?? 0) * cellHa;
+    const human = (id: number | null) => id === HUMAN_DRONE;
+    const found = (mine: (id: number | null) => boolean) => st.survivors.filter((s) => s.found && mine(s.foundBy)).length;
+    const area = (mine: (id: number | null) => boolean) => st.drones.filter((d) => mine(d.id)).reduce((sum, d) => sum + d.cellsSearched, 0) * cellHa;
+    const swarm = (id: number | null) => id !== null && !human(id);
     return {
-      human: { found: found(HUMAN_DRONE), hectares: area(HUMAN_DRONE) },
-      ai: { found: found(AI_DRONE), hectares: area(AI_DRONE) },
+      human: { found: found(human), hectares: area(human) },
+      ai: { found: found(swarm), hectares: area(swarm) },
       timeLeft: MATCH_S - st.time,
       survivorsLeft: st.survivors.filter((s) => !s.found && !s.lost).length,
     };
