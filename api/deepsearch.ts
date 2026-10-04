@@ -61,6 +61,9 @@ class HttpError extends Error {
   }
 }
 
+/** Server environment, read without needing Node's type definitions (see api/tsconfig.json). */
+const env = (globalThis as unknown as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+
 const cache = new Map<string, { at: number; result: DeepSearchResult }>();
 const lastCallByVisitor = new Map<string, number>();
 let lastCall = 0;
@@ -73,9 +76,9 @@ export async function POST(request: Request): Promise<Response> {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < CACHE_TTL_MS) return json(200, { ...hit.result, tokens: null, cached: true });
 
-    if (!process.env.GEMINI_API_KEY) throw new HttpError(503, "DeepSearch is not configured: set GEMINI_API_KEY on the server.");
+    if (!env.GEMINI_API_KEY) throw new HttpError(503, "DeepSearch is not configured: set GEMINI_API_KEY on the server.");
     throttle(request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local");
-    const result = await runDeepSearch(input, process.env.GEMINI_API_KEY, process.env.GEMINI_MODEL);
+    const result = await runDeepSearch(input, env.GEMINI_API_KEY, env.GEMINI_MODEL);
     if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value!);
     cache.set(key, { at: Date.now(), result });
     return json(200, result);
