@@ -1,27 +1,5 @@
 .area-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 20; width: 100%; padding: 12px 14px; }
-.area-list { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; }
+.area-list { display: flex; flex-direction: column; gap: 2px; }
 .area-list button { padding: 7px 8px; border: 0; border-radius: 8px; background: none; text-align: left; font-weight: 600; cursor: pointer; }
 .area-list button:hover { background: var(--surface); }
 .area-list button.on { background: var(--accent-soft); color: var(--accent); }
-.area-import { display: flex; gap: 6px; }
-.area-import input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
-.area-status { min-height: 1em; margin-top: 8px; color: var(--muted); font-size: 12px; }
-.area-menu h3 em { margin-left: 4px; color: var(--muted); font-style: normal; font-weight: 500; }
-.area-list { max-height: 220px; overflow-y: auto; }
-.area-search { display: flex; gap: 6px; }
-.area-search input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; font: inherit; }
-.area-results { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; }
-.area-results button { display: flex; flex-direction: column; gap: 1px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; text-align: left; cursor: pointer; }
-.area-results button:hover { background: var(--surface); }
-.area-results b { font-size: 13px; }
-.area-results span { color: var(--muted); font-size: 11px; }
-.area-parts { margin-top: 10px; }
-.area-parts-title { margin: 0 0 6px; font-size: 12px; font-weight: 600; }
-.area-parts-hint { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0 0; color: var(--muted); font-size: 11px; }
-.area-parts-hint i { display: inline-block; width: 10px; height: 10px; border: 1px solid rgba(47, 111, 237, 0.55); border-radius: 2px; background: rgba(47, 111, 237, 0.06); }
-.area-parts-hint i.ready { background: rgba(31, 158, 98, 0.28); border-color: rgba(31, 158, 98, 0.8); }
-.area-status.error { color: #c92a2a; }
-.area-menu.is-busy .area-parts-map, .area-menu.is-busy .area-results { opacity: 0.5; pointer-events: none; }
-.area-list small { margin-left: 4px; color: var(--muted); font-size: 10px; font-weight: 500; }
-.area-parts-centre { margin-bottom: 8px; }
-.area-menu { max-height: calc(100vh - 96px); overflow-y: auto; }

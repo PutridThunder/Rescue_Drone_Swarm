@@ -14,6 +14,7 @@ export function buildWorld(opts: {
   overpassTimeoutMs?: number;
   attempts?: number;
   source?: MapSource | null;
+  deadlineMs?: number;
 }): Promise<BuiltWorld>;
 
 /** Overpass-style elements ("out geom"): ways with geometry, relations with member geometry. */

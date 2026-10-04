@@ -1,8 +1,7 @@
 -- Rescue Drone Swarm: Snowflake setup, step 1 of 2. Run as ACCOUNTADMIN in a SQL worksheet
 -- ("Run all"). It creates the database, two tables, a tiny self-suspending warehouse and a
 -- restricted service user. Step 2 is snowflake/token.sql.
--- Already set up? Run this file again to add new tables: it is safe to re-run, and the
--- existing token keeps working.
+-- Safe to run again; the existing token keeps working.
 
 USE ROLE ACCOUNTADMIN;
 
@@ -50,64 +49,13 @@ CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.GAMES (
   DURATION_S       FLOAT
 );
 
--- ---- Maps: the website loads areas from here; the Python pipeline uploads them. ----------
-
--- One row per area the website can open.
-CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.AREAS (
-  AREA_ID      STRING,        -- e.g. lonsdale (used in the URL: ?area=lonsdale)
-  NAME         STRING,        -- e.g. "Lonsdale, North Vancouver"
-  SOUTH FLOAT, WEST FLOAT, NORTH FLOAT, EAST FLOAT,
-  WIDTH        NUMBER,        -- grid cells
-  HEIGHT       NUMBER,
-  CELL_SIZE_M  FLOAT,
-  BUILDINGS    NUMBER,
-  POPULATION   FLOAT,
-  VERSION      NUMBER,        -- changes on every upload (so caches refresh)
-  UPDATED_AT   TIMESTAMP_LTZ DEFAULT CURRENT_TIMESTAMP()
-);
-
--- The files the app loads for an area (world.json, map.json, places.json, eo.json,
--- satellite.jpg), stored base64-encoded (JSON gzipped first, about 0.5 MB per area in total).
-CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.AREA_FILES (
-  AREA_ID   STRING,
-  FILE      STRING,
-  ENCODING  STRING,           -- gzip | identity
-  BYTES     NUMBER,           -- original size
-  CONTENT   STRING
-);
-
--- The same maps as tables, for SQL analysis (coordinates in WGS84 lat/lon).
-CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.BUILDINGS (
-  AREA_ID STRING, BUILDING_ID NUMBER, HEIGHT_M FLOAT, AREA_M2 FLOAT,
-  CENTER_LAT FLOAT, CENTER_LON FLOAT, FOOTPRINT_WKT STRING
-);
-CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.ROADS (
-  AREA_ID STRING, ROAD_ID NUMBER, NAME STRING, WIDTH_M FLOAT, LENGTH_M FLOAT, PATH_WKT STRING
-);
-CREATE TABLE IF NOT EXISTS RESCUE_DRONES.APP.PLACES (
-  AREA_ID STRING, PLACE_ID STRING, NAME STRING, KIND STRING, TYPE STRING,
-  LAT FLOAT, LON FLOAT, CAPACITY NUMBER, CAPACITY_SOURCE STRING
-);
--- With real geography columns, for Snowflake's geospatial functions and map charts.
-CREATE OR REPLACE VIEW RESCUE_DRONES.APP.BUILDINGS_GEO AS
-  SELECT *, TRY_TO_GEOGRAPHY(FOOTPRINT_WKT) AS FOOTPRINT FROM RESCUE_DRONES.APP.BUILDINGS;
-CREATE OR REPLACE VIEW RESCUE_DRONES.APP.ROADS_GEO AS
-  SELECT *, TRY_TO_GEOGRAPHY(PATH_WKT) AS PATH FROM RESCUE_DRONES.APP.ROADS;
-
--- The app's role: add and read results; read, add and replace maps; nothing else.
+-- The app's role: can add rows and read them back, nothing else.
 CREATE ROLE IF NOT EXISTS RESCUE_APP;
 GRANT USAGE ON WAREHOUSE RESCUE_WH TO ROLE RESCUE_APP;
 GRANT USAGE ON DATABASE RESCUE_DRONES TO ROLE RESCUE_APP;
 GRANT USAGE ON SCHEMA RESCUE_DRONES.APP TO ROLE RESCUE_APP;
 GRANT SELECT, INSERT ON TABLE RESCUE_DRONES.APP.MISSIONS TO ROLE RESCUE_APP;
 GRANT SELECT, INSERT ON TABLE RESCUE_DRONES.APP.GAMES TO ROLE RESCUE_APP;
-GRANT SELECT, INSERT, DELETE ON TABLE RESCUE_DRONES.APP.AREAS TO ROLE RESCUE_APP;
-GRANT SELECT, INSERT, DELETE ON TABLE RESCUE_DRONES.APP.AREA_FILES TO ROLE RESCUE_APP;
-GRANT SELECT, INSERT, DELETE ON TABLE RESCUE_DRONES.APP.BUILDINGS TO ROLE RESCUE_APP;
-GRANT SELECT, INSERT, DELETE ON TABLE RESCUE_DRONES.APP.ROADS TO ROLE RESCUE_APP;
-GRANT SELECT, INSERT, DELETE ON TABLE RESCUE_DRONES.APP.PLACES TO ROLE RESCUE_APP;
-GRANT SELECT ON VIEW RESCUE_DRONES.APP.BUILDINGS_GEO TO ROLE RESCUE_APP;
-GRANT SELECT ON VIEW RESCUE_DRONES.APP.ROADS_GEO TO ROLE RESCUE_APP;
 
 -- A service user (no password, no login) that can only use an access token.
 CREATE USER IF NOT EXISTS RESCUE_APP_USER

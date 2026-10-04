@@ -13,7 +13,7 @@ export function snowflakeApi(env: Record<string, string>): Plugin {
       for (const k of KEYS) if (env[k]) process.env[k] = env[k];
       server.middlewares.use("/api/snowflake", async (req, res) => {
         let response: Response;
-        if (req.method === "GET") response = await GET(new Request(`http://localhost${req.originalUrl ?? req.url ?? "/api/snowflake"}`));
+        if (req.method === "GET") response = await GET();
         else if (req.method === "POST") {
           let body = "";
           for await (const chunk of req) body += chunk;
@@ -24,8 +24,7 @@ export function snowflakeApi(env: Record<string, string>): Plugin {
         }
         res.statusCode = response.status;
         res.setHeader("Content-Type", response.headers.get("Content-Type") ?? "application/json");
-        res.setHeader("Cache-Control", response.headers.get("Cache-Control") ?? "no-store");
-        res.end(Buffer.from(await response.arrayBuffer())); // map files can be binary (satellite.jpg)
+        res.end(await response.text());
       });
     },
   };

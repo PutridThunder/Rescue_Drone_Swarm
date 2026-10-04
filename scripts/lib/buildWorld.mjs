@@ -97,11 +97,13 @@ export function formatWorldJson(json) {
  * @param {(msg: string) => void} [opts.log]
  * @param {number} [opts.overpassTimeoutMs]
  * @param {number} [opts.attempts]     tries per Overpass mirror
+ * @param {number} [opts.deadlineMs]   stop trying further Overpass mirrors after this long
  * @param {Function} [opts.source]     async ({bbox, log}) => {buildings, roads, water, land}, each
  *                                     {elements} in Overpass "out geom" form; default: Overpass
  * @returns {Promise<{world: object, map: object, buildingCount: number}>}
  */
-export async function buildWorld({ name, bbox, staging = null, cacheDir = null, log = console.log, overpassTimeoutMs = 240_000, attempts = 2, source = null }) {
+export async function buildWorld({ name, bbox, staging = null, cacheDir = null, log = console.log, overpassTimeoutMs = 240_000, attempts = 2, source = null, deadlineMs = 0 }) {
+  const deadline = deadlineMs ? Date.now() + deadlineMs : Infinity;
   if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true });
   const [S, W, N, E] = bbox;
   const CELL = 10;
@@ -119,6 +121,7 @@ export async function buildWorld({ name, bbox, staging = null, cacheDir = null, 
     const file = cacheDir && path.join(cacheDir, `overpass-${name}-${hash(q)}.json`);
     if (file && fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, "utf8"));
     for (const url of MIRRORS) {
+      if (Date.now() > deadline) break; // out of time: don't start another mirror
       for (let attempt = 0; attempt < attempts; attempt++) {
         try {
           log(`  overpass ${name}: ${url} (try ${attempt + 1})`);
@@ -281,7 +284,7 @@ export async function buildWorld({ name, bbox, staging = null, cacheDir = null, 
   log(`Grid ${WIDTH} x ${HEIGHT} (${NCELLS} cells, ${CELL} m)`);
 
   log("Fetching OSM...");
-  // Map data: from `source` when given (e.g. Overture Maps in Snowflake), else one combined
+  // Map data: from `source` when given (another map provider), else one combined
   // Overpass request (one slot on the shared server instead of four), split by kind here.
   const { buildings, roads, water, land } = source ? await source({ bbox: [S, W, N, E], log }) : await fetchOsm();
 

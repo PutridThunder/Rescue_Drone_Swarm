@@ -51,9 +51,7 @@ Stored: per mission, the area, scenario, fleet, search circle, survivors found, 
 **Setup (once, about 15 minutes)**
 1. In Snowflake (a trial account is enough), open a SQL worksheet and run all of `snowflake/setup.sql` as `ACCOUNTADMIN`. It creates the database, two tables, an X-Small warehouse that suspends after 60 s, and a service user that can only read and add rows. It is safe to run again.
 2. Open `snowflake/token.sql` and run its statements **one at a time** (select one, then Ctrl/Cmd + Enter). The token statement shows its `token_secret` only once, so copy it immediately: use **1a** the first time and **1b** if the token already exists or the secret was lost. Statement 2 gives the account identifier, e.g. `MYORG-MYACCOUNT`. (A worksheet's "Run all" only shows the last result, which is why these aren't run together.)
-3. In Vercel (Project > Settings > Environment Variables) add `SNOWFLAKE_ACCOUNT` and `SNOWFLAKE_TOKEN`, then redeploy.
-4. **The whole world's map data:** in Snowflake's Marketplace, "Get" CARTO's free *Overture Maps* listings (Buildings, Transportation, Base; built from OpenStreetMap plus other open data, about 2.3 billion buildings), then run `snowflake/overture.sql`. Any searched city part is then built from your own Snowflake in a few seconds, with no outside map servers.
-5. Optional: `npm run maps:upload` copies the four built-in areas (with their satellite layers) into Snowflake too. Locally, put the same two lines in `.env.local` (see `.env.example`) and restart `npm run dev`.
+3. In Vercel (Project > Settings > Environment Variables) add `SNOWFLAKE_ACCOUNT` and `SNOWFLAKE_TOKEN`, then redeploy. Locally, put the same two lines in `.env.local` (see `.env.example`) and restart `npm run dev`.
 
 The token never reaches the browser: `api/snowflake.ts` is a Vercel function (the Vite dev server serves the same handler) that talks to Snowflake's SQL API and checks and clamps everything it receives. Never prefix these variables with `VITE_`. The token expires after 90 days; run statement 1b in `snowflake/token.sql` to renew it.
 

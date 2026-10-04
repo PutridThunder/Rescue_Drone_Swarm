@@ -14,8 +14,7 @@
     "eo:setup": "python3 -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt",
     "eo": "cd pipeline && ../.venv/bin/python -W ignore -m rescue_eo --all",
     "eo:test": "cd pipeline && ../.venv/bin/python -m pytest -q",
-    "area": "node scripts/build-area.mjs",
-    "maps:upload": "node scripts/upload-areas.mjs"
+    "area": "node scripts/build-area.mjs"
   },
   "dependencies": {
     "three": "^0.186.1",
