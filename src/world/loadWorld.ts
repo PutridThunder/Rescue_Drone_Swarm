@@ -13,6 +13,7 @@ export function worldFromJSON(json: WorldJSON): World {
     terrain: Uint8Array.from(json.terrain),
     elevation: Float32Array.from(json.elevation),
     buildingHeight: Float32Array.from(json.buildingHeight),
+    obstacleHeight: Float32Array.from(json.obstacleHeight ?? json.buildingHeight),
     population: Float32Array.from(json.population),
     coastDistance: new Float32Array(n),
     base: json.base,

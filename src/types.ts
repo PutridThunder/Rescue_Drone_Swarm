@@ -28,6 +28,7 @@ export interface World {
   terrain: Uint8Array; // Terrain enum per cell
   elevation: Float32Array; // metres above sea level (water ~0)
   buildingHeight: Float32Array; // metres, 0 if no building
+  obstacleHeight: Float32Array; // metres: tallest building touching the cell at all (flight obstacles)
   population: Float32Array; // estimated residents per cell (prior, not truth)
   coastDistance: Float32Array; // cells to nearest water cell (0 for water)
   base: { x: number; y: number }; // truck staging area
@@ -41,6 +42,7 @@ export interface WorldJSON {
   terrain: number[];
   elevation: number[];
   buildingHeight: number[];
+  obstacleHeight?: number[]; // older files: falls back to buildingHeight
   population: number[];
   base: { x: number; y: number };
   roadName?: number[];

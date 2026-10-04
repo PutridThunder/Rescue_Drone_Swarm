@@ -58,6 +58,7 @@ export function makeTestWorld(width = 60, height = 50): World {
     terrain,
     elevation,
     buildingHeight,
+    obstacleHeight: buildingHeight,
     population,
     coastDistance: new Float32Array(n),
     roadName: new Int16Array(n).fill(-1),

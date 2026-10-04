@@ -252,6 +252,7 @@ function formatWorldJson(json) {
     `  "terrain": ${formatGrid(json.terrain)},\n` +
     `  "elevation": ${formatGrid(json.elevation)},\n` +
     `  "buildingHeight": ${formatGrid(json.buildingHeight)},\n` +
+    `  "obstacleHeight": ${formatGrid(json.obstacleHeight)},\n` +
     `  "population": ${formatGrid(json.population)},\n` +
     `  "base": ${indent(json.base)},\n` +
     `  "roadName": ${formatGrid(json.roadName)},\n` +
@@ -465,7 +466,7 @@ async function main() {
     });
   }
 
-  // Buildings: supersample 3x3 per cell (10 m subcells) for coverage, height and floor area.
+  // Buildings: supersample 2x2 per cell (5 m subcells) for coverage, height and floor area.
   const SUB = 2;
   const subArea = (CELL / SUB) ** 2;
   const coverage = new Float32Array(NCELLS);
@@ -533,6 +534,8 @@ async function main() {
   };
   let buildingCount = 0;
   const vecBuildings = [];
+  // Flight obstacles: tallest building touching each cell at all (interior samples + outline).
+  const obstacle = new Float32Array(NCELLS);
   for (const el of buildings.elements) {
     const tags = el.tags || {};
     const type = tags.building;
@@ -552,10 +555,17 @@ async function main() {
         p: outer.flatMap((g) => [r2(toX(g.lon)), r2(toY(g.lat))]),
         h: Math.round(h * 10) / 10,
       });
+    if (outer && outer.length >= 3) {
+      rasterLine(outer, 0, (x, y) => {
+        const i = y * WIDTH + x;
+        obstacle[i] = Math.max(obstacle[i], h);
+      });
+    }
     scanFill(polygonEdges(el, SUB), WIDTH * SUB, HEIGHT * SUB, (sx, sy) => {
       const i = Math.floor(sy / SUB) * WIDTH + Math.floor(sx / SUB);
       coverage[i] += 1 / (SUB * SUB);
       bHeight[i] = Math.max(bHeight[i], h);
+      obstacle[i] = Math.max(obstacle[i], h);
       const residential =
         RES_TYPES.has(type) ||
         (type === "yes" && residentialZone[i] && !commercialZone[i]);
@@ -613,6 +623,8 @@ async function main() {
     terrain: Array.from(terrain),
     elevation: round(elevation, 10),
     buildingHeight: round(buildingHeight, 10),
+    // Tallest building touching each cell at all (even a corner): what drones must fly around.
+    obstacleHeight: round(obstacle, 10),
     population: round(population, 100),
     base,
     roadName: Array.from(roadName),

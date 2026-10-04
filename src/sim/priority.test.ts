@@ -36,6 +36,7 @@ function twoAreaWorld(): World {
     terrain,
     elevation,
     buildingHeight: new Float32Array(n),
+    obstacleHeight: new Float32Array(n),
     population,
     coastDistance: new Float32Array(n),
     base: { x: 15, y: 15 },

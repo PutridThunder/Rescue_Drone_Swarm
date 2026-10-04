@@ -64,6 +64,7 @@ const TRUCK_SPEED_FRAC = 0.35; // truck speed relative to drones
 const TRUCK_REPLAN = 6; // s between truck repositioning decisions
 const TRUCK_MOVE_MIN = 15; // cells; don't bother relocating for less
 const DOCK_DIST = 0.6; // cells
+const ROOF_CLEARANCE_M = 3; // drones keep this much vertical space above rooftops
 const FACADE_GAIN = 0.6; // looking at a high-rise from the street is less thorough than overflying
 // Defaults for a crowd the user plants by hand.
 const CROWD_RADIUS = 3; // cells
@@ -153,7 +154,8 @@ export class Simulation implements ISimulation {
     this.intelPop = new Float32Array(N);
     this.tall = new Uint8Array(N);
     for (let i = 0; i < N; i++)
-      if (world.buildingHeight[i] > cfg.flightAltitudeM) this.tall[i] = 1;
+      // Anything a building touches that reaches within the clearance of flight altitude is an obstacle.
+      if (world.obstacleHeight[i] > cfg.flightAltitudeM - ROOF_CLEARANCE_M) this.tall[i] = 1;
     this.hidden = new Uint8Array(N);
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {

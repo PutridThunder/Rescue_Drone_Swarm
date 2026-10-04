@@ -173,6 +173,7 @@ export function generateProceduralWorld(
     terrain,
     elevation,
     buildingHeight,
+    obstacleHeight: buildingHeight,
     population,
     coastDistance: new Float32Array(n),
     roadName: new Int16Array(n).fill(-1),
