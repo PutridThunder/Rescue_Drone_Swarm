@@ -141,6 +141,12 @@ export class Renderer {
     if (o.showSatellite !== undefined) this.city.setSatellite(o.showSatellite);
   }
 
+  /** Show or hide intel the player shouldn't see in the challenge (population tint, crowds). */
+  setIntelVisible(visible: boolean) {
+    this.city.setIntelVisible(visible);
+    this.actors.showIntel = visible;
+  }
+
   /** Show what `droneId` sees in `canvas` (the drone cam window); null hides it. */
   setDroneCam(droneId: number | null, canvas: HTMLCanvasElement | null) {
     // canvas null with a drone id: track the drone (for the full-screen view) without a window.

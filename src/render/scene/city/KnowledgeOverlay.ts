@@ -28,6 +28,8 @@ export class KnowledgeOverlay {
   // Last-seen settings; a change means every cell must be repainted.
   private knowledgeRef: unknown = null;
   private populationOn = false;
+  /** Draw the intel layers (population tint)? Off in the challenge: intel is for the swarm only. */
+  showIntel = true;
   private hazardOn = false;
   private impacted = false;
   private crowdsKey = "";
@@ -79,7 +81,7 @@ export class KnowledgeOverlay {
   /** Detect setting changes that require a full repaint. */
   private syncSettings(state: SimState): boolean {
     const k = state.knowledge;
-    const populationOn = state.config.info.population;
+    const populationOn = state.config.info.population && this.showIntel;
     const hazardOn = k.hazard !== null;
     const impacted = !!state.flood?.impacted;
     const crowdsKey = state.crowds.map((c) => c.id).join(",");

@@ -64,6 +64,11 @@ export class CityLayer {
     (this.overlay.mesh.material as THREE.Material).opacity = on ? SATELLITE_OVERLAY_OPACITY : 1; // keep the photo readable
   }
 
+  /** Show or hide the intel layers on the ground (the overlay repaints on its next update). */
+  setIntelVisible(visible: boolean) {
+    this.overlay.showIntel = visible;
+  }
+
   setLabelsVisible(visible: boolean) {
     this.labels?.setVisible(visible);
   }

@@ -28,6 +28,8 @@ export class ChallengeController {
     private readonly runner: MissionRunner,
     private readonly cam: DroneCamController,
     private readonly hud: Hud,
+    /** Show or hide intel on the map (population, crowds): the swarm uses it, the player doesn't see it. */
+    private readonly setIntelVisible: (visible: boolean) => void,
     /** Restart the mission with the runner's current config (resets the HUD too). */
     private readonly restart: () => void,
     /** A match ran to the end (not quit): the final score. */
@@ -53,11 +55,12 @@ export class ChallengeController {
     this.active = true;
     this.over = false;
     this.held.clear();
-    // The algorithm uses the population map and crowd intel (people are where they live and
-    // gather); the player sees both on the map too.
+    // The swarm uses every intel layer (population map, crowd intel, hazards); the player
+    // doesn't see them: the intel is part of the algorithm.
     this.runner.configure({ ...SETUP, info: { geography: true, population: true, crowds: true, disaster: true, elevation: true }, seed: Math.floor(Math.random() * 1e9) });
     this.runner.speed = 1;
     this.restart();
+    this.setIntelVisible(false); // intel is for the swarm only
     this.runner.sim.takeManualControl(HUMAN_DRONE);
 
     this.cam.onFullChange = (full) => {
@@ -113,6 +116,7 @@ export class ChallengeController {
       this.runner.speed = this.saved.speed;
       this.saved = null;
     }
+    this.setIntelVisible(true);
     this.restart();
   }
 

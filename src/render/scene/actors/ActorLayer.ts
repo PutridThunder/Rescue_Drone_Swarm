@@ -14,6 +14,8 @@ export class ActorLayer {
   readonly group = new THREE.Group();
   showPaths = true;
   showSensors = true;
+  /** Show crowd markers? Off in the challenge: intel is for the swarm only. */
+  showIntel = true;
   revealHidden = false;
   private drones = new Map<number, DroneActor>();
   private trucks = new Map<number, TruckActor>();
@@ -45,7 +47,7 @@ export class ActorLayer {
     for (const m of this.survivors.values()) m.update(ctx, time);
     this.sync(state.crowds, this.crowds, (c) => new CrowdMarker(c, ctx));
     // Predicted crowds only show while the fleet is using crowd intel.
-    for (const m of this.crowds.values()) m.setShown(m.crowd.source === "user" || state.config.info.crowds);
+    for (const m of this.crowds.values()) m.setShown(this.showIntel && (m.crowd.source === "user" || state.config.info.crowds));
   }
 
   /** World position and heading of a drone (for the follow camera and drone cam). */

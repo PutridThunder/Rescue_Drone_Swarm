@@ -99,7 +99,7 @@ export async function startApp() {
   });
   history = new HistoryController(world, hud);
   const stored = history;
-  const challenge = new ChallengeController(runner, droneCam, hud, restart, (score, winner, total, seconds) => void stored.gameDone(score, winner, total, seconds));
+  const challenge = new ChallengeController(runner, droneCam, hud, (visible) => renderer.setIntelVisible(visible), restart, (score, winner, total, seconds) => void stored.gameDone(score, winner, total, seconds));
 
   new AreaPicker(hud.brand.areaButton, areas, areaId, openArea);
 
