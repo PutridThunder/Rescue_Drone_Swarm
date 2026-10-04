@@ -113,6 +113,7 @@ export type DroneStatus =
   | "RETURNING"
   | "LOW_BATTERY"
   | "CHARGING"
+  | "MANUAL" // flown by a person (challenge mode)
   | "DISABLED";
 
 export interface DroneView {
@@ -128,6 +129,7 @@ export interface DroneView {
   taskId: number | null;
   distanceTravelled: number; // cells
   dockedTruck: number | null; // truck the drone is sitting on (landed), else null
+  cellsSearched: number; // cells this drone brought to "searched"
 }
 
 export type TruckStatus = "PARKED" | "DRIVING";

@@ -12,6 +12,7 @@ import { areaFile, currentAreaId, importArea, loadAreaIndex, openArea } from "..
 import { applyEarthObservation, loadEarthObservation } from "../world/earthObservation";
 import { loadMap, loadWorld } from "../world/loadWorld";
 import { hasCoastline, withScenario } from "./config";
+import { ChallengeController } from "./ChallengeController";
 import { CrowdIntelController } from "./CrowdIntelController";
 import { DroneCamController } from "./DroneCamController";
 import { MapTools } from "./MapTools";
@@ -77,6 +78,7 @@ export async function startApp() {
         hud.hidePlace();
       },
       onFollow: (id) => tools.follow(id),
+      onChallenge: () => challenge.start(),
       onView(change) {
         if (change.showDroneCam !== undefined) droneCam.setOn(change.showDroneCam);
         renderer.setOptions(change);
@@ -90,6 +92,7 @@ export async function startApp() {
 
   const droneCam = new DroneCamController(hud.el, renderer, hud, () => runner.sim.state);
   const tools = new MapTools(world, renderer, runner, hud, droneCam);
+  const challenge = new ChallengeController(runner, droneCam, hud, restart);
 
   const picker = new AreaPicker(hud.brand.areaButton, areas, areaId, {
     onSelect: openArea,
@@ -112,6 +115,7 @@ export async function startApp() {
   // Frame loop: step the mission, then draw.
   let hudTimer = 0;
   const tick = (realDt: number) => {
+    challenge.tick();
     const wasRunning = runner.sim.state.running;
     runner.step(realDt);
     const st = runner.sim.state;
@@ -125,7 +129,7 @@ export async function startApp() {
       hud.setState(st);
       droneCam.refresh();
     }
-    if (st.metrics.complete && !resultsShown) {
+    if (st.metrics.complete && !resultsShown && !challenge.isActive) {
       resultsShown = true;
       hud.showResults(st.metrics, !!st.flood);
     }

@@ -18,6 +18,9 @@ export class Drone implements DroneView {
   commitment = 0;
   chargeFrom = 1; // battery fraction when charging started
   lastCell = -1;
+  cellsSearched = 0;
+  /** Pilot input for a MANUAL drone: thrust -1..1 (forward), turn -1..1 (clockwise on the map). */
+  stick = { thrust: 0, turn: 0 };
   /** Remaining lawnmower waypoints through the current block. */
   sweep: { sector: number; waypoints: Waypoint[] } | null = null;
   private trailAcc = 0;

@@ -38,6 +38,7 @@ export interface HudCallbacks {
   onTool(tool: Tool): void;
   onFollow(droneId: number | null): void;
   onView(change: Partial<ViewOptions>): void;
+  onChallenge(): void;
 }
 
 export class Hud {
@@ -67,6 +68,7 @@ export class Hud {
       onReset: cb.onReset,
       onSpeed: cb.onSpeed,
       onDroneCam: (on) => cb.onView({ showDroneCam: on }),
+      onChallenge: cb.onChallenge,
     });
 
     const left = new SidePanel(hud, "left", "Mission setup", "setup");
@@ -155,6 +157,11 @@ export class Hud {
   setFollow(id: number | null) {
     this.following = id;
     this.fleet.setFollowing(id);
+  }
+
+  /** Full-screen view: hide everything except overlays marked .immersive-keep. */
+  setImmersive(on: boolean) {
+    this.el.classList.toggle("immersive", on);
   }
 
   setDroneCamOn(on: boolean) {

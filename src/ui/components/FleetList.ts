@@ -12,6 +12,7 @@ const STATUS: Record<DroneView["status"], string> = {
   RETURNING: "Returning to truck",
   LOW_BATTERY: "Low battery → truck",
   CHARGING: "Charging",
+  MANUAL: "Piloted by you",
   DISABLED: "Down",
 };
 const LOW_BATTERY_PCT = 25;

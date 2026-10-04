@@ -20,6 +20,7 @@ import {
 } from "./constants";
 import type { SimContext } from "./context";
 import type { Drone } from "./drone";
+import { ManualPilot } from "./manualPilot";
 import { messages } from "./messages";
 import { planLanes } from "./sweepPlan";
 import { insideSector, SECTOR_DONE, type Sector } from "./tasks";
@@ -32,8 +33,10 @@ import type { Truck } from "./truck";
 export class DroneController {
   /** Battery kept in reserve for the flight home (cells). */
   private readonly reserve: number;
+  private readonly manual: ManualPilot;
 
   constructor(private readonly ctx: SimContext) {
+    this.manual = new ManualPilot(ctx);
     this.reserve = RESERVE_CAPACITY_SHARE * ctx.cfg.batteryCapacity + RESERVE_BASE_CELLS;
   }
 
@@ -43,6 +46,10 @@ export class DroneController {
 
   update(d: Drone, dt: number) {
     if (!d.active) return;
+    if (d.status === "MANUAL") {
+      this.manual.update(d, dt);
+      return;
+    }
     const { ctx } = this;
     ctx.stats.activeTime += dt;
     if (d.status === "TRAVELLING" || d.status === "SEARCHING") ctx.stats.busyTime += dt;

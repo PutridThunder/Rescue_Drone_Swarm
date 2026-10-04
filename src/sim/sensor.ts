@@ -67,6 +67,7 @@ export class Sensor {
       lastObsT[i] = t;
       if (before < SEARCHED_THRESHOLD && after >= SEARCHED_THRESHOLD) {
         stats.searchedCells++;
+        d.cellsSearched++;
         stats.populationReached += ctx.priors.population[i];
       }
       const here = ctx.survivors.at(i);

@@ -1,16 +1,27 @@
-// Picture-in-picture "drone cam" window: a canvas the renderer draws the drone's view into, a
-// game-style overlay (live badge, altitude, battery, target, crosshair), thermal mode, and
-// drag-to-move (mouse or touch; the position is remembered).
+// "Drone cam" window: a canvas the renderer draws the drone's view into, a game-style overlay
+// (live badge, altitude, battery, target, crosshair), view buttons (drone cam / third person,
+// plus map when full screen), thermal mode, and drag-to-move (mouse or touch; the position is
+// remembered). Full screen, the window becomes a transparent overlay on the main view.
 
 import type { DroneView } from "../../types";
 import { droneColorCss } from "../../render/scene/palette";
 import { $, h, prefs } from "../dom";
 import "./DroneCamPanel.css";
 
+export type DroneCamView = "fpv" | "chase" | "map";
+
 export interface DroneCamCallbacks {
   onNext(): void;
   onClose(): void;
+  onView(view: DroneCamView): void;
+  onFull(full: boolean): void;
 }
+
+const VIEWS: [DroneCamView, string, string][] = [
+  ["fpv", "Cam", "Drone camera (first person)"],
+  ["chase", "3rd", "Third person (behind the drone)"],
+  ["map", "Map", "Map view following the drone"],
+];
 
 const STATUS: Record<DroneView["status"], string> = {
   IDLE: "STANDBY",
@@ -19,6 +30,7 @@ const STATUS: Record<DroneView["status"], string> = {
   RETURNING: "RTB",
   LOW_BATTERY: "LOW BATTERY",
   CHARGING: "CHARGING",
+  MANUAL: "PILOT",
   DISABLED: "SIGNAL LOST",
 };
 const POSITION_KEY = "dronecam-position";
@@ -32,7 +44,7 @@ export class DroneCamPanel {
   constructor(root: HTMLElement, cb: DroneCamCallbacks) {
     this.el = h(
       "div",
-      "dronecam",
+      "dronecam immersive-keep",
       `<canvas class="dronecam-view"></canvas>
        <div class="dronecam-lost">SIGNAL LOST</div>
        <div class="dronecam-top">
@@ -43,8 +55,10 @@ export class DroneCamPanel {
        <div class="dronecam-bottom">
          <span class="dronecam-badge dronecam-target" data-target></span>
          <span class="dronecam-buttons">
+           <span class="dronecam-views">${VIEWS.map(([v, label, title]) => `<button data-view="${v}" title="${title}">${label}</button>`).join("")}</span>
            <button data-action="thermal" title="Thermal camera">Thermal</button>
            <button data-action="next" title="Next drone">Next ›</button>
+           <button data-action="full" title="Full screen (F)">⛶</button>
            <button data-action="close" title="Close">✕</button>
          </span>
        </div>`,
@@ -57,8 +71,22 @@ export class DroneCamPanel {
       (e.currentTarget as HTMLElement).classList.toggle("on", on);
     });
     $(this.el, '[data-action="next"]').addEventListener("click", () => cb.onNext());
-    $(this.el, '[data-action="close"]').addEventListener("click", () => cb.onClose());
+    $(this.el, '[data-action="close"]').addEventListener("click", () => (this.full ? cb.onFull(false) : cb.onClose()));
+    $(this.el, '[data-action="full"]').addEventListener("click", () => cb.onFull(!this.full));
+    this.el.querySelectorAll<HTMLElement>("[data-view]").forEach((b) => b.addEventListener("click", () => cb.onView(b.dataset.view as DroneCamView)));
     this.makeDraggable();
+  }
+
+  private full = false;
+
+  /** Window (picture in picture) or full-screen overlay, and which view is active. */
+  setMode(full: boolean, view: DroneCamView) {
+    this.full = full;
+    this.el.classList.toggle("full", full);
+    this.el.dataset.mode = view;
+    this.el.querySelectorAll<HTMLElement>("[data-view]").forEach((b) => b.classList.toggle("on", b.dataset.view === view));
+    $(this.el, '[data-action="full"]').hidden = full;
+    $(this.el, '[data-action="close"]').title = full ? "Exit full screen (Esc)" : "Close";
   }
 
   setVisible(visible: boolean) {
@@ -79,7 +107,7 @@ export class DroneCamPanel {
   private makeDraggable() {
     let grab: { dx: number; dy: number } | null = null;
     this.el.addEventListener("pointerdown", (e) => {
-      if ((e.target as HTMLElement).closest("button") || e.button > 0) return;
+      if (this.full || (e.target as HTMLElement).closest("button") || e.button > 0) return;
       const r = this.el.getBoundingClientRect();
       grab = { dx: e.clientX - r.left, dy: e.clientY - r.top };
       this.el.setPointerCapture(e.pointerId);

@@ -25,6 +25,10 @@ export class MissionRunner {
     this.sim = this.create();
   }
 
+  get cellSizeM(): number {
+    return this.world.meta.cellSizeM;
+  }
+
   /** Start a fresh mission with the current config and placements. */
   restart() {
     this.sim = this.create();

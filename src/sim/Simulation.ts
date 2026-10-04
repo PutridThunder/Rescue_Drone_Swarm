@@ -118,6 +118,23 @@ export class Simulation implements ISimulation {
     return this.ctx.knowledge.drain();
   }
 
+  /** Hand a drone to a human pilot (challenge mode). The fleet stops planning for it. */
+  takeManualControl(id: number) {
+    const d = this.ctx.fleet.find((x) => x.id === id);
+    if (!d || !d.active) return;
+    this.ctx.pilot.releaseTask(d);
+    d.status = "MANUAL";
+    d.path = [];
+    d.charging = false;
+    this.ctx.replan.soon();
+  }
+
+  /** Pilot input for a manual drone: thrust and turn in -1..1. */
+  setStick(id: number, thrust: number, turn: number) {
+    const d = this.ctx.fleet.find((x) => x.id === id);
+    if (d?.status === "MANUAL") d.stick = { thrust, turn };
+  }
+
   /** Knock a drone out (a random airborne one if no id). Its block is handed back to the fleet. */
   disableDrone(id?: number): number | null {
     const { ctx } = this;

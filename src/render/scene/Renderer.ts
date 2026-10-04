@@ -6,7 +6,7 @@ import type { MapJSON, SimState, World } from "../../types";
 import { ActorLayer } from "./actors/ActorLayer";
 import { CameraRig } from "./CameraRig";
 import { CityLayer } from "./city/CityLayer";
-import { DroneCam } from "./DroneCam";
+import { DroneCam, type DroneCamStyle } from "./DroneCam";
 import "./labels.css";
 import { addLighting } from "./lighting";
 import { SCENE } from "./palette";
@@ -39,6 +39,8 @@ export class Renderer {
   private camDrone: number | null = null;
   private camCanvas: HTMLCanvasElement | null = null;
   private labelsWanted = true;
+  /** Full-screen view from the drone cam (instead of the map camera). */
+  private droneView = false;
   private clock = 0;
   private lastTime = performance.now();
 
@@ -99,10 +101,25 @@ export class Renderer {
   }
 
   render() {
+    if (this.droneView && this.camDrone !== null) {
+      this.droneCam.renderFull(this.renderer, this.scene);
+      this.labelRenderer.render(this.scene, this.droneCam.camera);
+      return;
+    }
     // The drone cam borrows a corner of the canvas, so it must render before the main view.
     if (this.camDrone !== null && this.camCanvas) this.droneCam.renderTo(this.renderer, this.scene, this.camCanvas);
     this.renderer.render(this.scene, this.rig.camera);
     this.labelRenderer.render(this.scene, this.rig.camera);
+  }
+
+  /** Drone cam style: out of the gimbal or following behind. */
+  setDroneCamStyle(style: DroneCamStyle) {
+    this.droneCam.style = style;
+  }
+
+  /** Show the drone cam full screen (true) or the map (false). */
+  setDroneView(on: boolean) {
+    this.droneView = on;
   }
 
   setOptions(o: Partial<RenderOptions>) {
@@ -115,6 +132,7 @@ export class Renderer {
 
   /** Show what `droneId` sees in `canvas` (the drone cam window); null hides it. */
   setDroneCam(droneId: number | null, canvas: HTMLCanvasElement | null) {
+    // canvas null with a drone id: track the drone (for the full-screen view) without a window.
     if (droneId !== this.camDrone) this.droneCam.reset();
     this.camDrone = droneId;
     this.camCanvas = canvas;

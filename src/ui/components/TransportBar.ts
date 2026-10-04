@@ -1,4 +1,5 @@
-// Top control bar: start/pause, speed, restart, drone cam toggle, mission clock, tsunami countdown.
+// Top control bar: start/pause, speed, restart, drone cam toggle, challenge mode, mission clock,
+// tsunami countdown.
 
 import type { SimState } from "../../types";
 import { $, delegate, h } from "../dom";
@@ -11,6 +12,7 @@ export interface TransportCallbacks {
   onReset(): void;
   onSpeed(multiplier: number): void;
   onDroneCam(on: boolean): void;
+  onChallenge(): void;
 }
 
 const SPEEDS = [1, 2, 4, 8];
@@ -26,6 +28,7 @@ export class TransportBar {
        <div class="seg transport-speed">${SPEEDS.map((s) => `<button data-speed="${s}" class="${s === 1 ? "on" : ""}">${s}×</button>`).join("")}</div>
        <button class="btn icon transport-reset" title="Restart mission">${icon("reset")}</button>
        <button class="btn transport-cam" title="Show or hide the drone camera">${icon("camera")}<span>Drone cam</span></button>
+       <button class="btn transport-game" title="Fly a drone yourself against the algorithm">${icon("gamepad")}<span>Challenge</span></button>
        <span class="transport-clock">00:00</span>
        <span class="chip danger transport-tsunami" hidden></span>`,
     );
@@ -37,6 +40,7 @@ export class TransportBar {
       this.el.querySelectorAll(".transport-speed button").forEach((x) => x.classList.toggle("on", x === b));
       cb.onSpeed(Number(b.dataset.speed));
     });
+    $(this.el, ".transport-game").addEventListener("click", () => cb.onChallenge());
     $(this.el, ".transport-cam").addEventListener("click", () => {
       const on = !$(this.el, ".transport-cam").classList.contains("on");
       this.setDroneCamOn(on);

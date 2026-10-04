@@ -87,3 +87,6 @@ details[open] summary { margin-bottom: 8px; }
 .startup-error { position: fixed; top: 50%; left: 50%; z-index: 100; max-width: 420px; padding: 20px 24px; transform: translate(-50%, -50%); }
 .startup-error h2 { margin-bottom: 8px; font-size: 16px; }
 .startup-error p { color: var(--muted); }
+
+/* Full-screen drone view / challenge: only overlays marked .immersive-keep stay. */
+.hud.immersive > :not(.immersive-keep):not(.toast) { display: none !important; }

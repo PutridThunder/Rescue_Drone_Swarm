@@ -28,3 +28,24 @@
 .dronecam-crosshair::before, .dronecam-crosshair::after { content: ""; position: absolute; background: rgba(255, 255, 255, 0.8); }
 .dronecam-crosshair::before { left: 50%; top: -8px; bottom: -8px; width: 1.5px; transform: translateX(-50%); }
 .dronecam-crosshair::after { top: 50%; left: -8px; right: -8px; height: 1.5px; transform: translateY(-50%); }
+
+.dronecam-views { display: flex; margin-right: 4px; }
+.dronecam-views button { border-radius: 0; margin-left: -1px; }
+.dronecam-views button:first-child { border-radius: 6px 0 0 6px; }
+.dronecam-views button:last-child { border-radius: 0 6px 6px 0; }
+.dronecam-views button.on { background: var(--drone); border-color: var(--drone); }
+.dronecam:not(.full) [data-view="map"] { display: none; }
+.dronecam:not(.full) .dronecam-views button:nth-child(2) { border-radius: 0 6px 6px 0; }
+
+/* Full screen: a transparent HUD over the main view (the renderer draws the drone's view there). */
+.dronecam.full { position: fixed; inset: 0 !important; width: auto; height: auto; border: 0; border-radius: 0; background: none; box-shadow: none; cursor: default; pointer-events: none; font-size: 13px; }
+.dronecam.full .dronecam-view { display: none; }
+.dronecam.full .dronecam-top, .dronecam.full .dronecam-bottom { left: 16px; right: 16px; }
+.dronecam.full .dronecam-top { top: 16px; }
+.dronecam.full .dronecam-bottom { bottom: 16px; }
+.dronecam.full button { pointer-events: auto; padding: 7px 11px; }
+.dronecam.full .dronecam-badge { padding: 6px 10px; }
+.dronecam.full[data-mode="map"] .dronecam-crosshair, .dronecam.full[data-mode="chase"] .dronecam-crosshair { display: none; }
+.dronecam.full::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.35); }
+.dronecam.full[data-mode="map"]::after { display: none; }
+.dronecam.full.thermal::before { content: ""; position: absolute; inset: 0; backdrop-filter: grayscale(1) contrast(1.6) brightness(0.9) sepia(1) hue-rotate(-50deg) saturate(4); pointer-events: none; }

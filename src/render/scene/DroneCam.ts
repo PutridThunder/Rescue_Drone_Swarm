@@ -1,5 +1,6 @@
-// First-person "drone cam": a second camera riding on one drone, rendered picture-in-picture
-// into a screen rectangle of the main canvas (scissor), so no extra WebGL context is needed.
+// "Drone cam": a second camera riding on one drone, either looking out of its gimbal (first
+// person) or following behind it (third person). Rendered picture-in-picture into a screen
+// rectangle of the main canvas (scissor, so no extra WebGL context), or full screen.
 
 import * as THREE from "three";
 
@@ -7,9 +8,14 @@ const FOV = 70;
 const LOOK_AHEAD = 7; // world units in front of the drone
 const LOOK_DOWN = 3.2; // camera tilts down toward the street (~25 degrees)
 const HEADING_SMOOTHING = 4; // higher = snappier turns
+const CHASE_BACK = 7; // third person: world units behind the drone
+const CHASE_UP = 3.5; // ... and above it
+
+export type DroneCamStyle = "fpv" | "chase";
 
 export class DroneCam {
   readonly camera = new THREE.PerspectiveCamera(FOV, 16 / 10, 0.1, 400);
+  style: DroneCamStyle = "fpv";
   private yaw = 0;
   private hasPose = false;
 
@@ -24,9 +30,22 @@ export class DroneCam {
     // Drone forward is +x in its local frame; group.rotation.y = -heading.
     const fx = Math.cos(this.yaw);
     const fz = Math.sin(this.yaw);
+    if (this.style === "chase") {
+      this.camera.position.set(pos.x - fx * CHASE_BACK, pos.y + CHASE_UP, pos.z - fz * CHASE_BACK);
+      this.camera.lookAt(pos.x + fx * LOOK_AHEAD * 0.6, pos.y - 1, pos.z + fz * LOOK_AHEAD * 0.6);
+      return;
+    }
     // Gimbal camera under the drone's nose, so the drone itself never blocks the view.
     this.camera.position.set(pos.x + fx * 0.5, pos.y - 0.3, pos.z + fz * 0.5);
     this.camera.lookAt(pos.x + fx * LOOK_AHEAD, pos.y - LOOK_DOWN, pos.z + fz * LOOK_AHEAD);
+  }
+
+  /** Render full screen into the main canvas. */
+  renderFull(renderer: THREE.WebGLRenderer, scene: THREE.Scene) {
+    const main = renderer.domElement;
+    this.camera.aspect = main.clientWidth / Math.max(1, main.clientHeight);
+    this.camera.updateProjectionMatrix();
+    renderer.render(scene, this.camera);
   }
 
   reset() {
