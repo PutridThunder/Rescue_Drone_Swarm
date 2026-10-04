@@ -18,29 +18,38 @@ function pointInPolygon(px: number, py: number, ring: number[]): boolean {
 }
 
 describe("obstacle avoidance", () => {
-  it("no drone enters a tall building footprint in Downtown Vancouver", () => {
-    const world = worldFromJSON(JSON.parse(readFileSync("public/areas/downtown/world.json", "utf8")));
-    const map = JSON.parse(readFileSync("public/areas/downtown/map.json", "utf8")) as MapJSON;
-    const towers = map.buildings
-      .filter((b) => b.h > DEFAULT_CONFIG.flightAltitudeM)
-      .map((b) => {
-        const xs = b.p.filter((_, k) => k % 2 === 0);
-        const ys = b.p.filter((_, k) => k % 2 === 1);
-        return { ring: b.p, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
-      });
-    expect(towers.length).toBeGreaterThan(100);
-
-    const sim = new Simulation(world, structuredClone(DEFAULT_CONFIG));
-    sim.start();
-    let violations = 0;
-    for (let k = 0; k < 2000; k++) {
-      sim.step(1 / 20);
-      for (const d of sim.state.drones) {
-        if (d.dockedTruck !== null || d.status === "DISABLED") continue;
-        const hit = towers.some((t) => d.x >= t.x0 && d.x <= t.x1 && d.y >= t.y0 && d.y <= t.y1 && pointInPolygon(d.x, d.y, t.ring));
-        if (hit) violations++;
-      }
-    }
-    expect(violations).toBe(0);
-  }, 60_000);
+  // Street map known up front, and none (the fleet maps buildings with its own cameras).
+  for (const geography of [true, false]) {
+    it(`no drone enters a tall building footprint in Downtown Vancouver (${geography ? "with" : "without"} a map)`, () => {
+      expect(violations(geography)).toBe(0);
+    }, 60_000);
+  }
 });
+
+function violations(geography: boolean): number {
+  const world = worldFromJSON(JSON.parse(readFileSync("public/areas/downtown/world.json", "utf8")));
+  const map = JSON.parse(readFileSync("public/areas/downtown/map.json", "utf8")) as MapJSON;
+  const towers = map.buildings
+    .filter((b) => b.h > DEFAULT_CONFIG.flightAltitudeM)
+    .map((b) => {
+      const xs = b.p.filter((_, k) => k % 2 === 0);
+      const ys = b.p.filter((_, k) => k % 2 === 1);
+      return { ring: b.p, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+    });
+  if (towers.length < 100) throw new Error("expected the Downtown towers");
+
+  const cfg = structuredClone(DEFAULT_CONFIG);
+  cfg.info.geography = geography;
+  const sim = new Simulation(world, cfg);
+  sim.start();
+  let violations = 0;
+  for (let k = 0; k < 2000; k++) {
+    sim.step(1 / 20);
+    for (const d of sim.state.drones) {
+      if (d.dockedTruck !== null || d.status === "DISABLED") continue;
+      const hit = towers.some((t) => d.x >= t.x0 && d.x <= t.x1 && d.y >= t.y0 && d.y <= t.y1 && pointInPolygon(d.x, d.y, t.ring));
+      if (hit) violations++;
+    }
+  }
+  return violations;
+}

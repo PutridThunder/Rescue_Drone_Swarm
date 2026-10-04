@@ -16,7 +16,7 @@ export interface SetupCallbacks {
 type NumericKey = "droneCount" | "truckCount" | "survivorCount" | "flightAltitudeM" | "sensorRange" | "batteryCapacity";
 
 const SWITCHES: [keyof InfoModes, string, string][] = [
-  ["geography", "Street map", "Buildings and streets known in advance"],
+  ["geography", "Street map", "Off: no map, drones find buildings with their own cameras"],
   ["population", "Population", "Where people live, plus crowds you report"],
   ["disaster", "Hazard warning", "Tsunami flood zone and countdown"],
   ["crowds", "Crowd intel", "Busy places and scheduled events"],

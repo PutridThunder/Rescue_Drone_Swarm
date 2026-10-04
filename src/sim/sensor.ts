@@ -47,10 +47,7 @@ export class Sensor {
       if (!known[i]) {
         known[i] = 1;
         k.markDirty(i);
-        if (tall[i]) {
-          ctx.navBlocked[i] = 1;
-          this.obstacleDiscovered = true;
-        }
+        if (tall[i] && !ctx.navBlocked[i]) this.discoverBuilding(i);
       }
       const before = searched[i];
       const p = gain[j] * (tall[i] ? FACADE_GAIN : 1) * (this.canopy?.[i] ? CANOPY_GAIN : 1);
@@ -73,6 +70,28 @@ export class Sensor {
       const here = ctx.survivors.at(i);
       if (here) this.detect(here, p, d);
     }
+  }
+
+  /**
+   * A wall of a building too tall to overfly was seen: block the building's whole footprint for
+   * path planning (its interior can't be seen, but a drone can tell it's one solid block).
+   */
+  private discoverBuilding(start: number) {
+    const { ctx } = this;
+    const { W, H, navBlocked } = ctx;
+    const { tall } = ctx.masks;
+    const stack = [start];
+    navBlocked[start] = 1;
+    while (stack.length > 0) {
+      const i = stack.pop()!;
+      const x = i % W;
+      const y = (i - x) / W;
+      if (x > 0 && tall[i - 1] && !navBlocked[i - 1]) (navBlocked[i - 1] = 1), stack.push(i - 1);
+      if (x < W - 1 && tall[i + 1] && !navBlocked[i + 1]) (navBlocked[i + 1] = 1), stack.push(i + 1);
+      if (y > 0 && tall[i - W] && !navBlocked[i - W]) (navBlocked[i - W] = 1), stack.push(i - W);
+      if (y < H - 1 && tall[i + W] && !navBlocked[i + W]) (navBlocked[i + W] = 1), stack.push(i + W);
+    }
+    this.obstacleDiscovered = true;
   }
 
   /** True if a high-rise sits between the drone's cell and disc offset `j`. */

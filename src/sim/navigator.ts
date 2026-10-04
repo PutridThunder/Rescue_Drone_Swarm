@@ -5,6 +5,9 @@ import type { Drone } from "./drone";
 import type { Sector } from "./tasks";
 
 /** Flight paths around known obstacles (A* plus string-pulling), with extra cost through hazards. */
+/** How far from a truck (cells) to look for an open cell to approach it from. */
+const TRUCK_APPROACH_RADIUS = 3;
+
 export class Navigator {
   private readonly astar: AStar;
   private readonly hazardCostBuf: Float32Array;
@@ -63,11 +66,27 @@ export class Navigator {
     return true; // keep trying on later sub-steps
   }
 
-  /** Path to land on the nearest truck. */
+  /**
+   * Path to land on the nearest truck. A truck can park on a road cell right against a tower
+   * (blocked for planning), so aim for the nearest open cell beside it, then hop onto the truck.
+   * If no route is known yet, hold position and try again next step (never fly through buildings).
+   */
   pathToTruck(d: Drone) {
-    const t = this.ctx.depot.nearest(d.x, d.y);
-    if (!this.planPath(d, Math.floor(t.x), Math.floor(t.y))) d.path = [];
-    d.path.push({ x: t.x, y: t.y });
+    const { ctx } = this;
+    const t = ctx.depot.nearest(d.x, d.y);
+    const tx = Math.floor(t.x);
+    const ty = Math.floor(t.y);
+    for (let r = 0; r <= TRUCK_APPROACH_RADIUS; r++) {
+      for (let y = ty - r; y <= ty + r; y++) {
+        for (let x = tx - r; x <= tx + r; x++) {
+          if (Math.max(Math.abs(x - tx), Math.abs(y - ty)) !== r || x < 0 || y < 0 || x >= ctx.W || y >= ctx.H) continue;
+          if ((r > 0 && ctx.navBlocked[y * ctx.W + x]) || !this.planPath(d, x, y)) continue;
+          d.path.push({ x: t.x, y: t.y });
+          return;
+        }
+      }
+    }
+    d.path = [];
   }
 
   /** A new obstacle was discovered: re-plan any path that now crosses one. */
