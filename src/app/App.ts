@@ -109,7 +109,8 @@ export async function startApp() {
     onSelect: openArea,
     search: searchPlaces,
     async openPart(part, name) {
-      openArea(await buildPart(part.id, name)); // returns at once when the part already exists
+      const built = await buildPart(part.id, name); // returns at once when the part already exists
+      openArea(built.id, built.name);
     },
   });
   void storedAreas.then((list) => picker.setAreas(mergeAreas(bundled, list)));

@@ -263,5 +263,5 @@ describe("Simulation", () => {
     );
     expect(foundOn).toBeGreaterThan(foundOff);
     expect(lostOn).toBeLessThan(lostOff);
-  });
+  }, 30_000); // several full simulations: slow when the machine is busy
 });

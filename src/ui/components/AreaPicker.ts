@@ -4,7 +4,7 @@
 // A part that doesn't exist yet is built on demand (once; then it's instant for everyone).
 
 import type { Part } from "../../../scripts/lib/worldGrid.mjs";
-import type { AreaInfo, PlaceResult } from "../../world/areas";
+import { rememberedName, type AreaInfo, type PlaceResult } from "../../world/areas";
 import { $, delegate, escapeHtml, h } from "../dom";
 import { PartsMap } from "./PartsMap";
 import "./AreaPicker.css";
@@ -37,7 +37,7 @@ export class AreaPicker {
     private readonly cb: AreaPickerCallbacks,
   ) {
     this.areas = areas;
-    button.querySelector("[data-area-name]")!.textContent = areas.find((a) => a.id === currentId)?.name ?? currentId;
+    button.querySelector("[data-area-name]")!.textContent = areas.find((a) => a.id === currentId)?.name ?? rememberedName(currentId) ?? currentId;
     this.menu = h(
       "div",
       "area-menu card",
@@ -96,6 +96,8 @@ export class AreaPicker {
   /** Called when Snowflake's list arrives (after the page is already usable). */
   setAreas(areas: AreaInfo[]) {
     this.areas = areas;
+    const current = areas.find((a) => a.id === this.currentId);
+    if (current) this.button.querySelector("[data-area-name]")!.textContent = current.name;
     this.parts.setReady(new Set(areas.map((a) => a.id)));
     this.renderList();
   }

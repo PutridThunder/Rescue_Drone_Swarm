@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import type { DroneView } from "../../../types";
 import { droneColor } from "../palette";
-import { disposeObject, GEOMETRY, MATERIAL, overlayMaterial, TRUCK_ROOF, type ActorContext } from "./shared";
+import { disposeObject, GEOMETRY, MATERIAL, overlayMaterial, TRUCK_ROOF, type ActorContext, setLinePoints } from "./shared";
 
 const SCALE = 0.7; // world units; exaggerated (~7 m) so drones read at city scale
 const DOWN_COLOR = 0x9aa3b2;
@@ -96,7 +96,7 @@ export class DroneActor {
     if (key !== this.pathKey) {
       this.pathKey = key;
       const pts = show ? [{ x: d.x, y: d.y }, ...d.path] : [];
-      this.path.geometry.setFromPoints(pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + ctx.flightUnits, p.y)));
+      setLinePoints(this.path, pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + ctx.flightUnits, p.y)));
       this.path.computeLineDistances();
     } else if (show && d.path.length) {
       // Keep the first segment glued to the drone between path changes.
@@ -114,6 +114,6 @@ export class DroneActor {
     if (key === this.trailKey) return;
     this.trailKey = key;
     const pts = ctx.showPaths ? d.trail.slice(-TRAIL_POINTS) : [];
-    this.trail.geometry.setFromPoints(pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + ctx.flightUnits * 0.98, p.y)));
+    setLinePoints(this.trail, pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + ctx.flightUnits * 0.98, p.y)));
   }
 }

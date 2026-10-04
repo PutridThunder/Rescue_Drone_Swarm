@@ -68,3 +68,22 @@ export function disposeObject(root: THREE.Object3D) {
   });
   root.removeFromParent();
 }
+
+/**
+ * Set a line's points. three.js can't grow an existing position buffer in place, so a longer
+ * line gets a fresh geometry (with room to spare, so it isn't replaced on every step).
+ */
+export function setLinePoints(line: THREE.Line, points: THREE.Vector3[]) {
+  const attr = line.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
+  if (!attr || attr.count < points.length) {
+    line.geometry.dispose();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(Math.max(8, Math.ceil(points.length * 1.5)) * 3), 3));
+    line.geometry = geo;
+  }
+  const pos = line.geometry.getAttribute("position") as THREE.BufferAttribute;
+  points.forEach((p, i) => pos.setXYZ(i, p.x, p.y, p.z));
+  pos.needsUpdate = true;
+  line.geometry.setDrawRange(0, points.length);
+  line.geometry.computeBoundingSphere();
+}

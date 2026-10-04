@@ -78,7 +78,7 @@ const FILE_TYPES: Record<string, string> = {
 // Browsers keep a file 5 min; Vercel's CDN a day (refreshed in the background). Uploads change
 // the area's version, which is part of the file URL, so new maps show up at once.
 const AREA_FILE_CACHE = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800";
-const AREA_LIST_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=600";
+const AREA_LIST_CACHE = "public, max-age=0, s-maxage=30, stale-while-revalidate=300"; // browsers always ask (new parts show up)
 
 export interface StoredArea {
   id: string;
@@ -299,10 +299,10 @@ export async function storeArea(p: Part, name: string, world: Record<string, unk
   await run(`DELETE FROM AREA_FILES WHERE AREA_ID = ?`, textBindings([p.id]));
   for (const [file, text] of files) {
     const bytes = new TextEncoder().encode(text);
-    await run(`INSERT INTO AREA_FILES (AREA_ID, FILE, ENCODING, BYTES, CONTENT) SELECT ?, ?, 'gzip', ?, ?`, {
-      ...textBindings([p.id, file]),
-      "3": { type: "FIXED", value: String(bytes.length) },
-      "4": { type: "TEXT", value: bytesToBase64(await gzip(bytes)) },
+    await run(`INSERT INTO AREA_FILES (AREA_ID, FILE, ENCODING, BYTES, CONTENT) SELECT ?, ?, ?, ?, ?`, {
+      ...textBindings([p.id, file, "gzip"]),
+      "4": { type: "FIXED", value: String(bytes.length) },
+      "5": { type: "TEXT", value: bytesToBase64(await gzip(bytes)) },
     });
   }
   await run(`DELETE FROM AREAS WHERE AREA_ID = ?`, textBindings([p.id]));

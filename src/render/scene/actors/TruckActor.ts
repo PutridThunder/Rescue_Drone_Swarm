@@ -2,7 +2,7 @@
 
 import * as THREE from "three";
 import type { TruckView } from "../../../types";
-import { disposeObject, GEOMETRY, MATERIAL, TRUCK_ROOF, type ActorContext } from "./shared";
+import { disposeObject, GEOMETRY, MATERIAL, TRUCK_ROOF, type ActorContext, setLinePoints } from "./shared";
 
 const WHEELS: [number, number][] = [
   [0.6, 0.36],
@@ -50,7 +50,7 @@ export class TruckActor {
     if (key === this.routeKey) return;
     this.routeKey = key;
     const pts = ctx.showPaths ? [{ x: t.x, y: t.y }, ...t.path] : [];
-    this.route.geometry.setFromPoints(pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + 0.12, p.y)));
+    setLinePoints(this.route, pts.map((p) => new THREE.Vector3(p.x, ctx.heights.groundAt(p.x, p.y) + 0.12, p.y)));
     this.route.computeLineDistances();
   }
 

@@ -71,7 +71,14 @@ export function mergeAreas(bundled: AreaInfo[], stored: AreaInfo[]): AreaInfo[] 
 }
 
 /** Switch area by reloading with ?area=<id> (keeps every module simple: one area per page load). */
-export function openArea(id: string) {
+export function openArea(id: string, name?: string) {
+  if (name) {
+    try {
+      sessionStorage.setItem(`area-name:${id}`, name); // shown until the area list catches up
+    } catch {
+      // storage blocked: the id is shown instead, briefly
+    }
+  }
   const url = new URL(location.href);
   url.searchParams.set("area", id);
   location.href = url.toString();
@@ -85,12 +92,21 @@ export async function searchPlaces(query: string): Promise<PlaceResult[]> {
   return body.places;
 }
 
-/** Make sure a map part exists (building it from OpenStreetMap if needed). Resolves to its id. */
-export async function buildPart(partId: string, name: string): Promise<string> {
+/** The name to show for an area that may not be in the list yet (e.g. just built). */
+export function rememberedName(id: string): string | null {
+  try {
+    return sessionStorage.getItem(`area-name:${id}`);
+  } catch {
+    return null;
+  }
+}
+
+/** Make sure a map part exists (building it if needed). Resolves to its id and name. */
+export async function buildPart(partId: string, name: string): Promise<{ id: string; name: string }> {
   const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "build", part: partId, name }) }).catch(() => null);
-  const body = (await res?.json().catch(() => null)) as { id?: string; error?: string } | null;
+  const body = (await res?.json().catch(() => null)) as { id?: string; name?: string; error?: string } | null;
   if (!res?.ok || !body?.id) throw new Error(body?.error ?? "Couldn't reach the server.");
-  return body.id;
+  return { id: body.id, name: body.name ?? name };
 }
 
 async function getJson<T>(url: string): Promise<T | null> {
