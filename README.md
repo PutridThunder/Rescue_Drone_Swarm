@@ -55,7 +55,7 @@ DeepSearch is the only online feature, and it is optional: the simulation itself
 | Vercel | Project > Settings > Environment Variables: `GEMINI_API_KEY` (all environments), then redeploy |
 | Local dev | `.env.local` in the repo root: `GEMINI_API_KEY=...` (see `.env.example`), then restart `npm run dev` |
 
-Optional: `GEMINI_MODEL` (default `gemini-2.5-flash`). Never name it `VITE_GEMINI_API_KEY`: anything with the `VITE_` prefix is bundled into the public JavaScript.
+Optional: `GEMINI_MODEL` (default `gemini-3.8-flash`). Never name it `VITE_GEMINI_API_KEY`: anything with the `VITE_` prefix is bundled into the public JavaScript.
 
 ## How the system works
 
