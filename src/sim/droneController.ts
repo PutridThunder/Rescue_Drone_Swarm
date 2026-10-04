@@ -135,9 +135,48 @@ export class DroneController {
     const s = this.ctx.sectors.get(d.taskId!);
     if (d.sweep?.sector !== s.id) {
       const spacing = Math.max(2, Math.round(this.ctx.cfg.sensorRange * LANE_SPACING_SHARE));
-      d.sweep = { sector: s.id, waypoints: planLanes(s, d.x, d.y, spacing, LANE_STEP) };
+      // Hasty search first (as real search-and-rescue teams do): a block with a known crowd
+      // first gets one quick pass over the crowd only, and the drone moves on to the next
+      // hotspot. The systematic lane sweep of the block comes on a later visit.
+      const hotspots = s.hastyDone ? [] : this.crowdPass(s);
+      d.sweep = hotspots.length
+        ? { sector: s.id, waypoints: hotspots, hasty: true }
+        : { sector: s.id, waypoints: planLanes(s, d.x, d.y, spacing, LANE_STEP) };
     }
-    if (!this.nextLaneWaypoint(d)) this.cleanupNext(d, s);
+    if (this.nextLaneWaypoint(d)) return;
+    if (d.sweep?.hasty) {
+      s.hastyDone = true;
+      this.finishBlock(d, s, false);
+      return;
+    }
+    this.cleanupNext(d, s);
+  }
+
+  /**
+   * Waypoints for a quick pass over the crowds the fleet knows about in a block, biggest first:
+   * each crowd's centre, plus a ring when the crowd is wider than the camera sees from there.
+   */
+  private crowdPass(s: Sector): { x: number; y: number }[] {
+    const { ctx } = this;
+    const info = ctx.state.config.info;
+    const range = ctx.cfg.sensorRange;
+    const out: { x: number; y: number }[] = [];
+    const crowds = ctx.state.crowds
+      .filter((c) => (c.source === "intel" ? info.crowds : info.population) && insideSector(s, c.x, c.y))
+      .sort((a, b) => b.people - a.people);
+    for (const c of crowds) {
+      out.push({ x: Math.floor(c.x), y: Math.floor(c.y) });
+      if (c.radius > range * 0.75) {
+        const r = c.radius * 0.6;
+        for (let k = 0; k < 6; k++) {
+          const a = (k / 6) * Math.PI * 2;
+          const x = Math.floor(c.x + Math.cos(a) * r);
+          const y = Math.floor(c.y + Math.sin(a) * r);
+          if (x >= 0 && y >= 0 && x < ctx.W && y < ctx.H) out.push({ x, y });
+        }
+      }
+    }
+    return out;
   }
 
   /** Head for the next lane waypoint that still has unsearched cells around it. */
@@ -224,7 +263,11 @@ export class DroneController {
     const across = (nx: number, ny: number) => {
       if (nx < 0 || ny < 0 || nx >= ctx.W || ny >= ctx.H) return false;
       const j = ny * ctx.W + nx;
-      return ctx.countsForCoverage(j) && !ctx.navBlocked[j] && ctx.knowledge.searched[j] < SEARCHED_THRESHOLD;
+      if (!ctx.countsForCoverage(j) || ctx.navBlocked[j] || ctx.knowledge.searched[j] >= SEARCHED_THRESHOLD) return false;
+      // Only leave it to a neighbour that will really be swept: not itself waiting (two blocks
+      // waiting on each other would leave the strip between them unsearched), finished or unreachable.
+      const n = ctx.sectors.at(nx, ny);
+      return n !== s && !n.waiting && !n.exhausted && n.view.searchedFrac < SECTOR_DONE;
     };
     return (
       (x === s.x0 && across(x - 1, y)) ||

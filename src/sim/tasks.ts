@@ -19,6 +19,8 @@ export interface Sector {
   exhausted: boolean;
   /** Only edge cells are left, and the neighbouring blocks' sweeps will cover them: skip for now. */
   waiting: boolean;
+  /** Its known crowds have had their quick "hasty search" pass; the full sweep comes later. */
+  hastyDone: boolean;
   boost: number; // survivor-cluster boost, 0..1
 }
 
@@ -60,6 +62,7 @@ export function buildSectors(
         name: sectorName(col, row),
         exhausted: false,
         waiting: false,
+        hastyDone: false,
         boost: 0,
         view: {
           id,

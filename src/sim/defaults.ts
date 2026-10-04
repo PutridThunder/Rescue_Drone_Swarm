@@ -24,7 +24,7 @@ export const DEFAULT_CONFIG: SimConfig = {
     population: true, // census-based population map: finds people ~25% sooner
     elevation: false,
     disaster: false,
-    crowds: false,
+    crowds: true, // predicted crowds (busy places at the disaster time) are searched first
   },
   scenario: "none",
   tsunamiImpactTime: 60,

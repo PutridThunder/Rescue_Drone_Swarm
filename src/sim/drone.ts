@@ -22,7 +22,7 @@ export class Drone implements DroneView {
   /** Pilot input for a MANUAL drone: thrust -1..1 (forward), turn -1..1 (clockwise on the map). */
   stick = { thrust: 0, turn: 0 };
   /** Remaining lawnmower waypoints through the current block. */
-  sweep: { sector: number; waypoints: Waypoint[] } | null = null;
+  sweep: { sector: number; waypoints: Waypoint[]; hasty?: boolean } | null = null;
   private trailAcc = 0;
 
   constructor(

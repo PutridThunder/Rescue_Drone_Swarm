@@ -52,8 +52,9 @@ export class ChallengeController {
     this.active = true;
     this.over = false;
     this.held.clear();
-    // The algorithm uses the population map (people are where they live); the player sees it too.
-    this.runner.configure({ ...SETUP, info: { ...this.runner.config.info, population: true }, seed: Math.floor(Math.random() * 1e9) });
+    // The algorithm uses the population map and crowd intel (people are where they live and
+    // gather); the player sees both on the map too.
+    this.runner.configure({ ...SETUP, info: { ...this.runner.config.info, population: true, crowds: true }, seed: Math.floor(Math.random() * 1e9) });
     this.runner.speed = 1;
     this.restart();
     this.runner.sim.takeManualControl(HUMAN_DRONE);

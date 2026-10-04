@@ -73,6 +73,20 @@ export class Planner {
 
   /** Blocks that still need searching, with their aggregated priority inputs. */
   private collectCandidates(): { candidates: Sector[]; aggs: SectorAgg[] } {
+    const found = this.collectOnce();
+    if (found.candidates.length > 0) return found;
+    // Only blocks waiting for their neighbours are left: release them so their edges get done.
+    let released = false;
+    for (const s of this.ctx.sectors.list) {
+      if (s.waiting) {
+        s.waiting = false;
+        released = true;
+      }
+    }
+    return released ? this.collectOnce() : found;
+  }
+
+  private collectOnce(): { candidates: Sector[]; aggs: SectorAgg[] } {
     const candidates: Sector[] = [];
     const aggs: SectorAgg[] = [];
     for (const s of this.ctx.sectors.list) {

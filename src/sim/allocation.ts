@@ -29,6 +29,14 @@ export interface AllocParams {
   releasedBonus: number;
   spread: number; // redundancy kernel radius, cells
   margin: number; // battery reserve, cells
+  /**
+   * Value-per-time scoring: a block's priority is divided by (1 + time to reach and sweep it /
+   * this many cells of flight), i.e. survivors per second rather than survivors at any cost.
+   * Omitted: the older linear distance penalty.
+   */
+  halfValueCells?: number;
+  /** Other searchers the fleet doesn't direct (e.g. a piloted drone): blocks near them count as covered. */
+  others?: { x: number; y: number }[];
 }
 
 export interface Assignment {
@@ -43,7 +51,9 @@ export interface Assignment {
 
 /**
  * Greedy auction: repeatedly take the best (drone, task) pair by
- * utility = priority - w.distance*dist - w.battery*battery - w.redundancy*redundancy (+ hysteresis),
+ * utility = priority / (1 + flight / halfValueCells) - w.battery*battery - w.redundancy*redundancy
+ * (+ hysteresis): survivors per second of flight. Without halfValueCells, the older
+ * priority - w.distance*dist - ... form.
  * A drone's current task is valued at max(current priority, priority it committed with) plus a
  * hysteresis bonus, so drones finish sectors instead of chasing fresher neighbours.
  * After each pick, raise the redundancy of tasks near the one just assigned so the fleet spreads out.
@@ -63,6 +73,9 @@ export function allocate(
   const out: Assignment[] = [];
   const distScale = Math.max(1, 0.5 * p.diag);
   const twoSigma2 = 2 * p.spread * p.spread;
+  for (const o of p.others ?? []) {
+    tasks.forEach((t, ti) => (redundancy[ti] += Math.exp(-((t.cx - o.x) ** 2 + (t.cy - o.y) ** 2) / twoSigma2)));
+  }
 
   while (remaining.length > 0) {
     let best: Assignment | null = null;
@@ -82,11 +95,10 @@ export function allocate(
         const red = Math.min(1, redundancy[ti]);
         const pri =
           d.task === t.id ? Math.max(t.priority, d.commitment) : t.priority;
-        let u =
-          pri -
-          w.distance * distCost -
-          w.battery * battCost -
-          w.redundancy * red;
+        const flight = dist * DETOUR + Math.min(t.searchCost, 30);
+        let u = p.halfValueCells
+          ? pri / (1 + flight / p.halfValueCells) - w.battery * battCost - w.redundancy * red
+          : pri - w.distance * distCost - w.battery * battCost - w.redundancy * red;
         if (d.task === t.id) u += p.hysteresis;
         else if (t.released) u += p.releasedBonus;
         if (!best || u > best.utility) {
