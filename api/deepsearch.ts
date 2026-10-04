@@ -10,7 +10,8 @@
 //   - low thinking, a short prompt and a capped, short answer
 //   - identical requests within an hour are answered from a cache (also cached in the browser)
 //   - a per-visitor cool-down and a global minimum gap, to stay under free per-minute limits
-//   - GEMINI_MODEL may list several models ("a,b"): the next is tried if one is out of quota
+//   - GEMINI_MODEL may list several models ("a,b"): a busy model (503) is retried once, then the
+//     next model is tried, as it is when one is out of quota (429) or not offered (404)
 //
 // Runs on the server only (a Vercel function, and the Vite dev server via
 // server/deepsearch/vitePlugin.ts), so the API key never reaches the browser.
@@ -18,10 +19,13 @@
 //
 // Self-contained on purpose (no local imports) so Vercel can bundle it as is.
 
-const DEFAULT_MODEL = "gemini-3.8-flash";
+// Tried in order. The "-latest" alias is a fallback for when the main model is busy or out of
+// free quota; set GEMINI_MODEL to override the whole list.
+const DEFAULT_MODEL = "gemini-3.8-flash,gemini-flash-lite-latest";
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const MAX_DESCRIPTION = 300;
-const TIMEOUT_MS = 45_000;
+const TIMEOUT_MS = 20_000; // per Gemini call (a run may make a few, within Vercel's 60 s)
+const BUSY_RETRY_MS = 1_500; // wait before retrying a model that answered "busy" (503)
 const MAX_OUTPUT_TOKENS = 800; // room for low thinking + a ~150-token answer
 const CACHE_TTL_MS = 60 * 60_000;
 const CACHE_MAX = 200;
@@ -103,12 +107,21 @@ export async function runDeepSearch(input: DeepSearchRequest, apiKey: string | u
   const list = (models || DEFAULT_MODEL).split(",").map((m) => m.trim()).filter(Boolean);
   let lastError: HttpError | null = null;
   for (const model of list) {
-    try {
-      return await callModel(model, input, apiKey);
-    } catch (err) {
-      // Out of quota (429) or not offered to this key (404): try the next model, if any.
-      if (err instanceof HttpError && (err.status === 429 || err.status === 404)) lastError = err;
-      else throw err;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await callModel(model, input, apiKey);
+      } catch (err) {
+        if (!(err instanceof HttpError)) throw err;
+        lastError = err;
+        // Busy (503): wait a moment and try this model once more, then move on.
+        if (err.status === 503 && attempt === 0) {
+          await new Promise((r) => setTimeout(r, BUSY_RETRY_MS));
+          continue;
+        }
+        // Busy again, out of quota (429) or not offered to this key (404): next model, if any.
+        if (err.status === 503 || err.status === 429 || err.status === 404) break;
+        throw err;
+      }
     }
   }
   throw lastError!;
@@ -137,6 +150,9 @@ async function callModel(model: string, input: DeepSearchRequest, apiKey: string
     const message = detail?.error?.message ?? res.statusText;
     // Older models don't take thinkingLevel: ask again without it (a 400 costs no quota).
     if (res.status === 400 && thinking && /thinking/i.test(message)) return callModel(model, input, apiKey, false);
+    if (res.status === 503 || res.status === 500) {
+      throw new HttpError(503, `Gemini is busy right now (high demand on ${model}). Try again in a minute.`);
+    }
     if (res.status === 429) {
       throw new HttpError(429, `Gemini free-tier quota reached for ${model} (per minute or per day). Try again in a minute or tomorrow; usage: https://ai.dev/rate-limit`);
     }

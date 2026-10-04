@@ -5,7 +5,7 @@ import { toPlannerWeights } from "./deepSearch";
 
 const WEIGHTS = { population: 0.9, hazard: 0.5, urgency: 1, unsearched_area: 0.5, distance_cost: 0.25, battery_cost: 0.5, avoid_overlap: 0 };
 const BASE = { lat: 49.3, lon: -123.1, area: "Lonsdale" };
-let clock = Date.parse("2026-10-03T12:00:00Z");
+let clock = Date.now() + 24 * 3600_000; // ahead of real time, so the real-time retry test never blocks the others
 const request = (body: unknown, ip = "1.1.1.1") =>
   new Request("http://x/api/deepsearch", { method: "POST", body: JSON.stringify(body), headers: { "x-forwarded-for": ip } });
 const geminiReply = (status = 200) =>
@@ -123,8 +123,20 @@ describe("DeepSearch", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("retries a busy model once, then falls back to the next one", async () => {
+    vi.useRealTimers(); // the retry waits 1.5 s for real
+    process.env.GEMINI_API_KEY = "test-key";
+    process.env.GEMINI_MODEL = "model-a,model-b";
+    const fetchMock = vi.fn(async (url: string) => (url.includes("model-a") ? geminiReply(503) : geminiReply()));
+    vi.stubGlobal("fetch", fetchMock);
+    const body = await (await POST(request({ ...BASE, description: "g" }, "2.2.2.2"))).json();
+    expect(body.model).toBe("model-b");
+    expect(fetchMock.mock.calls.map((c) => String(c[0]).includes("model-a"))).toEqual([true, true, false]);
+  });
+
   it("explains a quota error in plain words", async () => {
     process.env.GEMINI_API_KEY = "test-key";
+    process.env.GEMINI_MODEL = "model-a";
     vi.stubGlobal("fetch", vi.fn(async () => geminiReply(429)));
     const res = await POST(request({ ...BASE, description: "f" }));
     expect(res.status).toBe(429);
