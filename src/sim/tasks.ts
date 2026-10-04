@@ -17,6 +17,8 @@ export interface Sector {
   name: string;
   view: TaskView;
   exhausted: boolean;
+  /** Only edge cells are left, and the neighbouring blocks' sweeps will cover them: skip for now. */
+  waiting: boolean;
   boost: number; // survivor-cluster boost, 0..1
 }
 
@@ -57,6 +59,7 @@ export function buildSectors(
         cy: (y0 + y1) / 2,
         name: sectorName(col, row),
         exhausted: false,
+        waiting: false,
         boost: 0,
         view: {
           id,

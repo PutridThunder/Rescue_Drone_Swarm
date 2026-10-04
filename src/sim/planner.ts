@@ -80,7 +80,7 @@ export class Planner {
       s.view.searchedFrac = agg.searchedFrac;
       s.view.isFrontier = agg.frontier;
       s.view.assignedDrone = null;
-      if (!s.exhausted && agg.believed > 0 && agg.searchedFrac < SECTOR_DONE) {
+      if (!s.exhausted && !s.waiting && agg.believed > 0 && agg.searchedFrac < SECTOR_DONE) {
         candidates.push(s);
         aggs.push(agg);
       }

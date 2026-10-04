@@ -168,7 +168,11 @@ export class DroneController {
     return false;
   }
 
-  /** After the lanes: fly to the nearest unsearched cell, preferring to keep going straight. */
+  /**
+   * After the lanes: fly to the nearest unsearched cell, preferring to keep going straight.
+   * Edge cells that the neighbouring block's (unsearched) sweep will cover anyway are left for
+   * it: chasing them now is duplicate work (they were most of the clean-up flying).
+   */
   private cleanupNext(d: Drone, s: Sector) {
     const { ctx } = this;
     const { searched } = ctx.knowledge;
@@ -176,6 +180,7 @@ export class DroneController {
     const hy = Math.sin(d.heading);
     let believed = 0;
     let done = 0;
+    let deferred = 0;
     let best = -1;
     let bestScore = Infinity;
     ctx.sectors.forEachCoverageCell(s, (i, x, y) => {
@@ -185,6 +190,10 @@ export class DroneController {
         return;
       }
       if (ctx.navBlocked[i] || ctx.unreachable[i]) return;
+      if (this.neighbourWillCover(s, x, y)) {
+        deferred++;
+        return;
+      }
       const dx = x + 0.5 - d.x;
       const dy = y + 0.5 - d.y;
       const dist = Math.hypot(dx, dy);
@@ -197,11 +206,32 @@ export class DroneController {
       }
     });
     const frac = believed > 0 ? done / believed : 1;
+    if (frac < SECTOR_DONE && best < 0 && deferred > 0) {
+      s.waiting = true; // the rest is on its edges: let the neighbours' sweeps finish it
+      this.finishBlock(d, s, false);
+      return;
+    }
     if (frac >= SECTOR_DONE || best < 0) {
       this.finishBlock(d, s, frac < SECTOR_DONE && believed > 0);
       return;
     }
     if (!ctx.nav.planPath(d, best % ctx.W, Math.floor(best / ctx.W))) ctx.unreachable[best] = 1;
+  }
+
+  /** An edge cell whose neighbour across the block edge is still unsearched land. */
+  private neighbourWillCover(s: Sector, x: number, y: number): boolean {
+    const { ctx } = this;
+    const across = (nx: number, ny: number) => {
+      if (nx < 0 || ny < 0 || nx >= ctx.W || ny >= ctx.H) return false;
+      const j = ny * ctx.W + nx;
+      return ctx.countsForCoverage(j) && !ctx.navBlocked[j] && ctx.knowledge.searched[j] < SEARCHED_THRESHOLD;
+    };
+    return (
+      (x === s.x0 && across(x - 1, y)) ||
+      (x === s.x1 - 1 && across(x + 1, y)) ||
+      (y === s.y0 && across(x, y - 1)) ||
+      (y === s.y1 - 1 && across(x, y + 1))
+    );
   }
 
   /** Re-route when the truck we're flying to has moved away from our planned landing point. */
@@ -240,6 +270,13 @@ export class DroneController {
   private finishBlock(d: Drone, s: Sector, exhausted: boolean) {
     const { ctx } = this;
     if (exhausted) s.exhausted = true;
+    // Neighbours left waiting for this block's sweep can now be re-checked.
+    if (!s.waiting) {
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const n = ctx.sectors.at(s.cx + dx * (s.x1 - s.x0), s.cy + dy * (s.y1 - s.y0));
+        if (n && n !== s) n.waiting = false;
+      }
+    }
     ctx.state.metrics.tasksCompleted++;
     const pct = Math.round(ctx.sectors.searchedFrac(s) * 100);
     ctx.log.emit("taskComplete", messages.blockFinished(d.id, s.view.label, pct, exhausted), d.id, s.id);

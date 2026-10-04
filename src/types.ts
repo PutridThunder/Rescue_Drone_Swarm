@@ -104,6 +104,7 @@ export interface SimConfig {
   weights: Weights;
   /** Only search inside this circle (drawn on the map); null searches the whole area. */
   searchArea: SearchArea | null;
+
 }
 
 // ---------------------------------------------------------------------------

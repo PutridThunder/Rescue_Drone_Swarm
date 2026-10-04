@@ -21,7 +21,7 @@ export const DEFAULT_CONFIG: SimConfig = {
   survivorCount: 25,
   info: {
     geography: true,
-    population: false,
+    population: true, // census-based population map: finds people ~25% sooner
     elevation: false,
     disaster: false,
     crowds: false,
