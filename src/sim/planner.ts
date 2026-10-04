@@ -41,7 +41,7 @@ export class Planner {
     const { ctx } = this;
     const { reasons, announce } = ctx.replan.take();
     ctx.mission.updateMetrics();
-    updateFrontier(ctx.knowledge, ctx.world.terrain, ctx.W, ctx.H);
+    updateFrontier(ctx.knowledge, ctx.world.terrain, ctx.W, ctx.H, ctx.masks.hidden);
 
     const { candidates, aggs } = this.collectCandidates();
     ctx.sectors.pruneReleased(candidates);
@@ -193,7 +193,7 @@ export class Planner {
           metrics.tasksReassigned++;
         }
       }
-      changes.push(change);
+      if (change.from !== change.to) changes.push(change); // heading home without a task isn't a re-task
     }
     for (const d of ctx.fleet) if (d.active && d.taskId != null) ctx.sectors.get(d.taskId).view.assignedDrone = d.id;
     return { changes, distance };

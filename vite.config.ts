@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { areasApi } from "./server/areas/vitePlugin";
+import { areasApi } from "./server/areas/vitePlugin.ts";
 
 export default defineConfig({
   plugins: [areasApi()],

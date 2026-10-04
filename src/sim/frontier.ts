@@ -5,6 +5,7 @@ export const FRONTIER_THRESHOLD = 0.5;
 
 /**
  * Frontier = unsearched, not-known-water cells bordering searched cells or the known/unknown boundary.
+ * Cells no sensor can see (`hidden`, inside high-rises) are never frontier: they can't be searched.
  * Full O(N) pass; called at the replan cadence (~0.2 ms on 36k cells). Returns the frontier size.
  */
 export function updateFrontier(
@@ -12,6 +13,7 @@ export function updateFrontier(
   terrain: Uint8Array,
   width: number,
   height: number,
+  hidden?: Uint8Array,
 ): number {
   const { searched, known, frontier } = k;
   let count = 0;
@@ -22,7 +24,8 @@ export function updateFrontier(
       let f = 0;
       if (
         searched[i] < FRONTIER_THRESHOLD &&
-        !(known[i] && terrain[i] === Terrain.Water)
+        !(known[i] && terrain[i] === Terrain.Water) &&
+        !hidden?.[i]
       ) {
         const kn = known[i];
         if (

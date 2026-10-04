@@ -1,6 +1,6 @@
 // Dev-server endpoint: POST /api/areas {query} -> {id, name} after building the area's map.
 import type { Plugin } from "vite";
-import { importArea } from "./importArea";
+import { importArea } from "./importArea.ts";
 
 export function areasApi(): Plugin {
   return {

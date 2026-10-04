@@ -300,7 +300,7 @@ exports[`golden trace > synthetic world: placements, crowd intel, failure and re
     "droneFailures": 1,
     "droneUtilization": 0.84,
     "populationReached": 15953.31,
-    "populationTotal": 16784.5,
+    "populationTotal": 16384.5,
     "redundancyFrac": 0.27,
     "survivorsFound": 29,
     "survivorsLost": 0,

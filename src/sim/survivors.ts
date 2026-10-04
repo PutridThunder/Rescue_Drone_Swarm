@@ -26,6 +26,7 @@ export class SurvivorRegistry {
   add(x: number, y: number): SurvivorView | null {
     const i = this.ctx.cellIndex(x, y);
     if (i < 0 || !this.ctx.isSearchable(i)) return null;
+    if (this.ctx.state.flood?.impacted && this.ctx.tsunami.floodMask?.[i]) return null; // already under water
     const s: SurvivorView = { id: this.nextId++, x, y, found: false, foundBy: null, foundAt: null, lost: false, placed: true };
     this.list.push(s);
     this.index(s);

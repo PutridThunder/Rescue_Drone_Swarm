@@ -50,7 +50,7 @@ export class PopulationPriors {
 
     const crowd: CrowdView = { id: this.nextCrowdId++, x, y, radius, people, source, label: opts.label };
     ctx.state.crowds.push(crowd);
-    ctx.state.metrics.populationTotal += people;
+    if (source === "user") ctx.state.metrics.populationTotal += people; // a prediction isn't extra population
     for (let k = 0; k < survivors; k++) {
       const j = cells[ctx.rng.int(cells.length)];
       const s = ctx.survivors.add((j % ctx.W) + ctx.rng.range(0.2, 0.8), Math.floor(j / ctx.W) + ctx.rng.range(0.2, 0.8));
