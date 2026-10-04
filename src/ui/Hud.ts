@@ -7,11 +7,13 @@
 //   └────────────────┘                                          └─────────────────┘
 //   Legend                        Toolbar        PlacePopover · ResultsModal · Toast · MobileTabs
 
+import type { History } from "../data/records";
 import type { EarthObservation, InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState } from "../types";
 import { BrandHeader } from "./components/BrandHeader";
 import { DecisionFeed } from "./components/DecisionFeed";
 import { FleetList } from "./components/FleetList";
 import { DataSources } from "./components/DataSources";
+import { HistoryPanel } from "./components/HistoryPanel";
 import { Legend, type ViewOptions } from "./components/Legend";
 import { MobileTabs } from "./components/MobileTabs";
 import { PlacePopover, type PlaceInfo } from "./components/PlacePopover";
@@ -52,6 +54,7 @@ export class Hud {
   private readonly toolbar: Toolbar;
   private readonly legend: Legend;
   private readonly sources: DataSources;
+  private readonly history: HistoryPanel;
   private readonly place: PlacePopover;
   private readonly results: ResultsModal;
   private readonly toaster: Toast;
@@ -73,6 +76,7 @@ export class Hud {
     const left = new SidePanel(hud, "left", "Mission setup", "setup");
     this.setup = new SetupPanel(left.body, config, cb);
     this.sources = new DataSources(left.body);
+    this.history = new HistoryPanel(left.body);
 
     const right = new SidePanel(hud, "right", "Live", "live");
     this.stats = new StatsCard(right.body);
@@ -102,6 +106,11 @@ export class Hud {
 
   setTsunamiAvailable(available: boolean) {
     this.setup.setTsunamiAvailable(available);
+  }
+
+  /** Results stored in Snowflake (null hides the section). */
+  setHistory(data: History | null) {
+    this.history.show(data);
   }
 
   /** List the satellite datasets behind this area and offer the satellite image toggle. */

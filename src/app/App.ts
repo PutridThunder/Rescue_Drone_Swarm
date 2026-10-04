@@ -15,6 +15,7 @@ import { hasCoastline, withScenario } from "./config";
 import { ChallengeController } from "./ChallengeController";
 import { CrowdIntelController } from "./CrowdIntelController";
 import { DroneCamController } from "./DroneCamController";
+import { HistoryController } from "./HistoryController";
 import { MapTools } from "./MapTools";
 import { MissionRunner } from "./MissionRunner";
 
@@ -34,9 +35,11 @@ export async function startApp() {
   const renderer = new Renderer(sceneRoot, world, map);
   const runner = new MissionRunner(world);
   let resultsShown = false;
+  let history: HistoryController | null = null; // created once the HUD exists
 
   const restart = () => {
     runner.restart();
+    history?.reset();
     resultsShown = false;
     hud.hideResults();
     hud.clearLog();
@@ -94,7 +97,9 @@ export async function startApp() {
     const km = (r: number) => ((r * world.meta.cellSizeM) / 1000).toFixed(2);
     hud.toast(area ? `Search area set: ${km(area.r)} km radius. Survivors are somewhere inside.` : "Searching the whole map again");
   });
-  const challenge = new ChallengeController(runner, droneCam, hud, restart);
+  history = new HistoryController(world, hud);
+  const stored = history;
+  const challenge = new ChallengeController(runner, droneCam, hud, restart, (score, winner, total, seconds) => void stored.gameDone(score, winner, total, seconds));
 
   const picker = new AreaPicker(hud.brand.areaButton, areas, areaId, {
     onSelect: openArea,
@@ -118,6 +123,7 @@ export async function startApp() {
   let hudTimer = 0;
   const tick = (realDt: number) => {
     challenge.tick();
+    if (!challenge.isActive) stored.sample(runner.sim.state);
     const wasRunning = runner.sim.state.running;
     runner.step(realDt);
     const st = runner.sim.state;
@@ -134,6 +140,7 @@ export async function startApp() {
     if (st.metrics.complete && !resultsShown && !challenge.isActive) {
       resultsShown = true;
       hud.showResults(st.metrics, !!st.flood);
+      void stored.missionDone(st);
     }
     renderer.render();
   };

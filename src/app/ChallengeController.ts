@@ -3,7 +3,7 @@
 // in the time limit wins (area searched breaks a tie). Runs full screen, third person.
 
 import type { SimConfig } from "../types";
-import { ChallengeHud, type ChallengeScore } from "../ui/components/ChallengeHud";
+import { challengeWinner, ChallengeHud, type ChallengeScore } from "../ui/components/ChallengeHud";
 import type { Hud } from "../ui/Hud";
 import type { DroneCamController } from "./DroneCamController";
 import type { MissionRunner } from "./MissionRunner";
@@ -29,6 +29,8 @@ export class ChallengeController {
     private readonly hud: Hud,
     /** Restart the mission with the runner's current config (resets the HUD too). */
     private readonly restart: () => void,
+    /** A match ran to the end (not quit): the final score. */
+    private readonly onFinish: (score: ChallengeScore, winner: "human" | "algorithm" | "tie", survivorsTotal: number, durationS: number) => void = () => {},
   ) {
     this.ui = new ChallengeHud(hud.el, {
       onAgain: () => this.start(),
@@ -92,6 +94,7 @@ export class ChallengeController {
     this.runner.sim.setStick(HUMAN_DRONE, 0, 0);
     this.hud.setRunning(false, true);
     this.ui.showResult(score);
+    this.onFinish(score, challengeWinner(score), this.runner.sim.state.survivors.length, Math.min(MATCH_S, this.runner.sim.state.time));
   }
 
   exit() {

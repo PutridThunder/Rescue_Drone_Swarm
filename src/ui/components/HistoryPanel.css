@@ -1,0 +1,10 @@
+.history-score { display: flex; gap: 6px; align-items: baseline; margin: 4px 0; }
+.history-score b { color: var(--accent); font-size: 26px; line-height: 1; }
+.history-score b.human { color: #e8890c; }
+.history-score span { color: var(--muted); font-size: 11px; }
+.history-score i { margin: 0 4px; color: var(--muted); font-size: 11px; font-style: normal; }
+.history-note { margin: 4px 0 8px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+.history-areas, .history-recent { display: flex; flex-direction: column; gap: 5px; margin: 0 0 8px; padding: 0; list-style: none; font-size: 12px; }
+.history-areas li { display: grid; grid-template-columns: 1fr auto; column-gap: 8px; }
+.history-areas small, .history-recent small { grid-column: 1 / -1; color: var(--muted); font-size: 11px; }
+.history-recent li { display: flex; flex-direction: column; }

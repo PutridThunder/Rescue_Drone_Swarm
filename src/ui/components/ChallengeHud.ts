@@ -12,6 +12,13 @@ export interface ChallengeScore {
   survivorsLeft: number;
 }
 
+/** Most survivors found wins; area searched breaks a tie. */
+export function challengeWinner({ human, ai }: ChallengeScore): "human" | "algorithm" | "tie" {
+  if (human.found !== ai.found) return human.found > ai.found ? "human" : "algorithm";
+  if (Math.abs(human.hectares - ai.hectares) < 0.05) return "tie";
+  return human.hectares > ai.hectares ? "human" : "algorithm";
+}
+
 export interface ChallengeHudCallbacks {
   onAgain(): void;
   onExit(): void;
@@ -80,8 +87,9 @@ export class ChallengeHud {
 
   showResult(s: ChallengeScore) {
     const { human, ai } = s;
-    const humanWins = human.found > ai.found || (human.found === ai.found && human.hectares > ai.hectares);
-    const tie = human.found === ai.found && Math.abs(human.hectares - ai.hectares) < 0.05;
+    const winner = challengeWinner(s);
+    const humanWins = winner === "human";
+    const tie = winner === "tie";
     const title = tie ? "It's a tie" : humanWins ? "You beat the algorithm!" : "The algorithm wins";
     const why = humanWins
       ? "Nice flying. Now imagine six of you, never tired, coordinating every second."

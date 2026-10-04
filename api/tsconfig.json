@@ -1,0 +1,16 @@
+{
+  // Used by Vercel when it compiles the serverless functions in this folder. They run on Node
+  // but need no type packages, so none are loaded.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "types": []
+  },
+  "include": ["*.ts"]
+}

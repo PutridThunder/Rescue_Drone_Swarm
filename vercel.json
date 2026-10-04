@@ -1,0 +1,5 @@
+{
+  "functions": {
+    "api/snowflake.ts": { "maxDuration": 30 }
+  }
+}
