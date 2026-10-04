@@ -163,7 +163,8 @@ function config() {
   if (!account || !token) throw new HttpError(503, "Snowflake is not configured: set SNOWFLAKE_ACCOUNT and SNOWFLAKE_TOKEN on the server.");
   if (!/^[A-Za-z0-9._-]+$/.test(account)) throw new HttpError(503, "SNOWFLAKE_ACCOUNT looks wrong (use ORGNAME-ACCOUNTNAME, e.g. MYORG-MYACCOUNT).");
   return {
-    url: `https://${account.toLowerCase()}.snowflakecomputing.com/api/v2/statements`,
+    // Hostnames can't contain "_": Snowflake uses "-" in place of underscores in account URLs.
+    url: `https://${account.toLowerCase().replace(/_/g, "-").replace(/\.snowflakecomputing\.com$/, "")}.snowflakecomputing.com/api/v2/statements`,
     token,
     warehouse: env.SNOWFLAKE_WAREHOUSE || "RESCUE_WH",
     database: env.SNOWFLAKE_DATABASE || "RESCUE_DRONES",

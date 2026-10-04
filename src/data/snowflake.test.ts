@@ -65,6 +65,14 @@ describe("Snowflake storage", () => {
     expect(JSON.parse(sent.bindings["17"].value)).toEqual([[0, 0, 0], [10, 0.05, 1]]);
   });
 
+  it("turns underscores in the account name into hyphens for the URL", async () => {
+    process.env.SNOWFLAKE_ACCOUNT = "MYORG-MY_ACCOUNT";
+    const fetchMock = vi.fn(async () => Response.json({ data: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    await POST(post(MISSION, "8.8.8.8"));
+    expect((fetchMock.mock.calls[0] as unknown as [string])[0]).toBe("https://myorg-my-account.snowflakecomputing.com/api/v2/statements");
+  });
+
   it("slows down rapid writes from one visitor", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ data: [] })));
     expect((await POST(post(MISSION, "5.5.5.5"))).status).toBe(200);
