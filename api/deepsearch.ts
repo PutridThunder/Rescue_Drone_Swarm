@@ -26,7 +26,9 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const MAX_DESCRIPTION = 300;
 const TIMEOUT_MS = 20_000; // per Gemini call (a run may make a few, within Vercel's 60 s)
 const BUSY_RETRY_MS = 1_500; // wait before retrying a model that answered "busy" (503)
-const MAX_OUTPUT_TOKENS = 800; // room for low thinking + a ~150-token answer
+// A cap, not a cost: the answer itself is ~150 tokens. Gemini counts thinking against this cap,
+// so a tight cap can cut the JSON off mid-way.
+const MAX_OUTPUT_TOKENS = 2048;
 const CACHE_TTL_MS = 60 * 60_000;
 const CACHE_MAX = 200;
 const VISITOR_COOLDOWN_MS = 15_000; // per IP, between calls that reach Gemini
@@ -60,6 +62,8 @@ class HttpError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** Gemini answered, but not with usable JSON: worth asking the next model. */
+    readonly badAnswer = false,
   ) {
     super(message);
   }
@@ -118,8 +122,9 @@ export async function runDeepSearch(input: DeepSearchRequest, apiKey: string | u
           await new Promise((r) => setTimeout(r, BUSY_RETRY_MS));
           continue;
         }
-        // Busy again, out of quota (429) or not offered to this key (404): next model, if any.
-        if (err.status === 503 || err.status === 429 || err.status === 404) break;
+        // Busy again, out of quota (429), not offered to this key (404) or an unusable answer:
+        // next model, if any.
+        if (err.status === 503 || err.status === 429 || err.status === 404 || err.badAnswer) break;
         throw err;
       }
     }
@@ -160,8 +165,16 @@ async function callModel(model: string, input: DeepSearchRequest, apiKey: string
   }
   const body = (await res.json()) as GeminiResponse;
   const candidate = body.candidates?.[0];
-  const text = candidate?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
-  return { ...parseAnswer(text), sources: sourcesOf(candidate), model, tokens: body.usageMetadata?.totalTokenCount ?? null, cached: false };
+  // Skip "thought" parts: only the answer text is JSON.
+  const text = candidate?.content?.parts?.filter((p) => !p.thought).map((p) => p.text ?? "").join("") ?? "";
+  try {
+    return { ...parseAnswer(text), sources: sourcesOf(candidate), model, tokens: body.usageMetadata?.totalTokenCount ?? null, cached: false };
+  } catch (err) {
+    // Shows up in the Vercel function logs, to see what Gemini actually sent.
+    console.error(`DeepSearch: unusable answer from ${model} (finishReason ${candidate?.finishReason ?? "?"}):`, text.slice(0, 500));
+    if (candidate?.finishReason === "MAX_TOKENS") throw new HttpError(502, `Gemini's answer from ${model} was cut off. Try again.`, true);
+    throw err;
+  }
 }
 
 /** Short on purpose: every word is paid for on every call. */
@@ -192,18 +205,23 @@ const RESPONSE_SCHEMA = {
 export function parseAnswer(text: string): Pick<DeepSearchResult, "weights" | "reasons" | "summary"> {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new HttpError(502, "Gemini did not return JSON");
+  if (start < 0 || end <= start) throw new HttpError(502, "Gemini did not return JSON", true);
   let raw: { summary?: unknown; weights?: Record<string, unknown>; reasons?: Record<string, unknown> };
+  const candidate = text.slice(start, end + 1);
   try {
-    raw = JSON.parse(text.slice(start, end + 1));
+    raw = JSON.parse(candidate);
   } catch {
-    throw new HttpError(502, "Gemini returned malformed JSON");
+    try {
+      raw = JSON.parse(candidate.replace(/,\s*([}\]])/g, "$1")); // the usual slip: trailing commas
+    } catch {
+      throw new HttpError(502, "Gemini returned malformed JSON", true);
+    }
   }
   const weights = {} as Record<DeepSearchWeightKey, number>;
   const reasons: Partial<Record<DeepSearchWeightKey, string>> = {};
   for (const k of WEIGHT_KEYS) {
     const v = Number(raw.weights?.[k]);
-    if (!Number.isFinite(v)) throw new HttpError(502, `Gemini left out the "${k}" weight`);
+    if (!Number.isFinite(v)) throw new HttpError(502, `Gemini left out the "${k}" weight`, true);
     weights[k] = Math.round(Math.min(1, Math.max(0, v)) * 10) / 10;
     const why = raw.reasons?.[k];
     if (typeof why === "string" && why.trim()) reasons[k] = why.trim().slice(0, 120);
@@ -231,7 +249,8 @@ export function parseRequest(body: unknown): DeepSearchRequest {
 }
 
 interface GeminiCandidate {
-  content?: { parts?: { text?: string }[] };
+  content?: { parts?: { text?: string; thought?: boolean }[] };
+  finishReason?: string;
   groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] };
 }
 interface GeminiResponse {

@@ -41,6 +41,22 @@ describe("DeepSearch", () => {
     expect(r.reasons.hazard).toBe("flood zone");
   });
 
+  it("tolerates trailing commas and keeps URLs in the summary intact", () => {
+    const r = parseAnswer('```json\n{"summary":"See https://cnv.org/alerts","weights":{"population":0.9,"hazard":0.5,"urgency":1,"unsearched_area":0.5,"distance_cost":0.3,"battery_cost":0.5,"avoid_overlap":0,},}\n```');
+    expect(r.summary).toBe("See https://cnv.org/alerts");
+    expect(r.weights.urgency).toBe(1);
+  });
+
+  it("asks the next model when an answer is cut off", async () => {
+    process.env.GEMINI_API_KEY = "test-key";
+    process.env.GEMINI_MODEL = "model-a,model-b";
+    const cutOff = Response.json({ candidates: [{ content: { parts: [{ text: '{"summary":"Busy wat' }] }, finishReason: "MAX_TOKENS" }] });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => (url.includes("model-a") ? cutOff : geminiReply())));
+    const body = await (await POST(request({ ...BASE, description: "h" }, "3.3.3.3"))).json();
+    expect(body.model).toBe("model-b");
+  });
+
   it("rejects answers with a missing weight", () => {
     expect(() => parseAnswer(JSON.stringify({ weights: { population: 1 } }))).toThrow(/hazard/);
   });
