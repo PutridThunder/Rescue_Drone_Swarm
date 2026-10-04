@@ -6,13 +6,7 @@
 // World (ground truth geography)
 // ---------------------------------------------------------------------------
 
-export const enum Terrain {
-  Water = 0,
-  Ground = 1,
-  Road = 2,
-  Park = 3, // parks, forest, green space
-  Building = 4,
-}
+export { Terrain, type TerrainCode } from "./shared/terrain";
 
 export interface WorldMeta {
   name: string;

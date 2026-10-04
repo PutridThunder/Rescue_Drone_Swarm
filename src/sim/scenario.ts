@@ -1,8 +1,7 @@
+import { Terrain } from "../shared/terrain";
 import type { InfoModes, SurvivorView, World } from "../types";
 import type { Rng } from "./rng";
 
-const WATER = 0;
-const PARK = 3;
 
 /** True tsunami hazard: low-lying (below 1.5 x run-up) and close to the coast. */
 export function computeHazardTruth(world: World, runupM: number): Float32Array {
@@ -10,7 +9,7 @@ export function computeHazardTruth(world: World, runupM: number): Float32Array {
   const out = new Float32Array(n);
   const elevScale = Math.max(1, runupM * 1.5);
   for (let i = 0; i < n; i++) {
-    if (world.terrain[i] === WATER) continue;
+    if (world.terrain[i] === Terrain.Water) continue;
     const elevF = clamp01(1 - world.elevation[i] / elevScale);
     const coastF = Math.exp(-world.coastDistance[i] / 30);
     out[i] = elevF * (0.35 + 0.65 * coastF);
@@ -27,7 +26,7 @@ export function computeFloodMask(world: World, runupM: number): Uint8Array {
   let head = 0;
   let tail = 0;
   for (let i = 0; i < n; i++) {
-    if (world.terrain[i] === WATER) {
+    if (world.terrain[i] === Terrain.Water) {
       mask[i] = 2;
       queue[tail++] = i;
     }
@@ -65,7 +64,7 @@ export function estimateHazard(
 ) {
   const n = world.terrain.length;
   for (let i = 0; i < n; i++) {
-    if (world.terrain[i] === WATER) {
+    if (world.terrain[i] === Terrain.Water) {
       outHazard[i] = 0;
       outFloodProne[i] = 0;
     } else if (info.elevation) {
@@ -92,7 +91,7 @@ export function sampleSurvivors(
   let popSum = 0;
   let land = 0;
   for (let i = 0; i < n; i++) {
-    if (world.terrain[i] !== WATER) {
+    if (world.terrain[i] !== Terrain.Water) {
       popSum += world.population[i];
       land++;
     }
@@ -103,8 +102,8 @@ export function sampleSurvivors(
   let acc = 0;
   for (let i = 0; i < n; i++) {
     const t = world.terrain[i];
-    if (t !== WATER && (!allowed || allowed[i])) {
-      let w = world.population[i] + meanPop * (t === PARK ? 0.25 : 0.04);
+    if (t !== Terrain.Water && (!allowed || allowed[i])) {
+      let w = world.population[i] + meanPop * (t === Terrain.Park ? 0.25 : 0.04);
       if (hazardTruth) w *= 1 + 12 * hazardTruth[i]; // tsunami scenario: busy waterfront (Shipyards, Quay)
       acc += w;
     }
@@ -125,7 +124,7 @@ export function sampleSurvivors(
           y >= 0 &&
           x < width &&
           y < height &&
-          world.terrain[j] !== WATER &&
+          world.terrain[j] !== Terrain.Water &&
           (!allowed || allowed[j])
         )
           cell = j;

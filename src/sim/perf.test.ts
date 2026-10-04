@@ -24,9 +24,10 @@ describe("performance (218x167 grid)", () => {
       sim.drainEvents();
       sim.drainDirtyCells();
     }
-    const replan = (sim as unknown as { replan(): void }).replan.bind(sim);
+    // A weights change triggers a full replan through the public API.
+    const replan = (i: number) => sim.updateConfig({ weights: { ...DEFAULT_CONFIG.weights, distance: 0.8 + (i % 2) * 0.01 } });
     const r0 = performance.now();
-    for (let i = 0; i < 50; i++) replan();
+    for (let i = 0; i < 50; i++) replan(i);
     const replanMs = (performance.now() - r0) / 50;
     const avg = total / steps;
     console.log(

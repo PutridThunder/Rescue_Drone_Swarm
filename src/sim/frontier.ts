@@ -1,7 +1,7 @@
+import { Terrain } from "../shared/terrain";
 import type { Knowledge } from "./knowledge";
 
 export const FRONTIER_THRESHOLD = 0.5;
-const WATER = 0;
 
 /**
  * Frontier = unsearched, not-known-water cells bordering searched cells or the known/unknown boundary.
@@ -22,7 +22,7 @@ export function updateFrontier(
       let f = 0;
       if (
         searched[i] < FRONTIER_THRESHOLD &&
-        !(known[i] && terrain[i] === WATER)
+        !(known[i] && terrain[i] === Terrain.Water)
       ) {
         const kn = known[i];
         if (
