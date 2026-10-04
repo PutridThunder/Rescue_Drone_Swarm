@@ -1,6 +1,6 @@
--- Rescue Drone Swarm: Snowflake setup. Run once, as ACCOUNTADMIN, in a SQL worksheet
+-- Rescue Drone Swarm: Snowflake setup, step 1 of 2. Run as ACCOUNTADMIN in a SQL worksheet
 -- ("Run all"). It creates the database, two tables, a tiny self-suspending warehouse and a
--- restricted service user whose access token the Vercel function uses.
+-- restricted service user. Step 2 is snowflake/token.sql.
 
 USE ROLE ACCOUNTADMIN;
 
@@ -67,10 +67,5 @@ CREATE AUTHENTICATION POLICY IF NOT EXISTS RESCUE_DRONES.APP.RESCUE_TOKEN_POLICY
   PAT_POLICY = (NETWORK_POLICY_EVALUATION = ENFORCED_NOT_REQUIRED);
 ALTER USER RESCUE_APP_USER SET AUTHENTICATION POLICY RESCUE_DRONES.APP.RESCUE_TOKEN_POLICY;
 
--- Create the access token. The result shows its secret ONCE: copy it into Vercel as
--- SNOWFLAKE_TOKEN. It expires after 90 days; run this again with a new name to renew.
-ALTER USER RESCUE_APP_USER ADD PROGRAMMATIC ACCESS TOKEN RESCUE_VERCEL
-  ROLE_RESTRICTION = 'RESCUE_APP' DAYS_TO_EXPIRY = 90;
-
--- Also needed for Vercel: your account identifier (see below), e.g. MYORG-MYACCOUNT.
-SELECT CURRENT_ORGANIZATION_NAME() || '-' || CURRENT_ACCOUNT_NAME() AS SNOWFLAKE_ACCOUNT;
+-- Done. Next: run snowflake/token.sql (on its own) to create the access token.
+-- This file is safe to run again.

@@ -49,11 +49,11 @@ Optional. When a mission or a challenge game ends, its results are stored in Sno
 Stored: per mission, the area, scenario, fleet, search circle, survivors found, time, % searched, distance, battery, and a coverage timeline (every 10 s); per game, both sides' survivors and area plus the winner (`snowflake/setup.sql` lists every column).
 
 **Setup (once, about 15 minutes)**
-1. In Snowflake (a trial account is enough), open a SQL worksheet and run all of `snowflake/setup.sql` as `ACCOUNTADMIN`. It creates the database, two tables, an X-Small warehouse that suspends after 60 s, and a service user that can only read and add rows.
-2. Copy two results from the last statements: the **token secret** (shown only once) and the **account identifier**, e.g. `MYORG-MYACCOUNT`.
+1. In Snowflake (a trial account is enough), open a SQL worksheet and run all of `snowflake/setup.sql` as `ACCOUNTADMIN`. It creates the database, two tables, an X-Small warehouse that suspends after 60 s, and a service user that can only read and add rows. It is safe to run again.
+2. Open `snowflake/token.sql` and run its two statements **one at a time**. The first creates the access token: copy its `token_secret` immediately, because it is shown only once. The second gives the account identifier, e.g. `MYORG-MYACCOUNT`. (A worksheet's "Run all" only shows the last result, which is why they are separate.)
 3. In Vercel (Project > Settings > Environment Variables) add `SNOWFLAKE_ACCOUNT` and `SNOWFLAKE_TOKEN`, then redeploy. Locally, put the same two lines in `.env.local` (see `.env.example`) and restart `npm run dev`.
 
-The token never reaches the browser: `api/snowflake.ts` is a Vercel function (the Vite dev server serves the same handler) that talks to Snowflake's SQL API and checks and clamps everything it receives. Never prefix these variables with `VITE_`. The token expires after 90 days; run the last `ALTER USER` statement again with a new name to renew it.
+The token never reaches the browser: `api/snowflake.ts` is a Vercel function (the Vite dev server serves the same handler) that talks to Snowflake's SQL API and checks and clamps everything it receives. Never prefix these variables with `VITE_`. The token expires after 90 days; run the token statement in `snowflake/token.sql` again with a new name to renew it.
 
 ## How the system works
 
