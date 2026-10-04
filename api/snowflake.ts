@@ -3,6 +3,16 @@
 //   POST  {kind: "mission" | "game", ...}  adds a row (a finished mission or challenge game)
 //   GET                                    summary for the History panel: totals, per-area
 //                                          averages, algorithm-vs-human record, recent rows
+//   GET   ?areas                           the areas stored in Snowflake (id, name, bbox, version)
+//   GET   ?search=<city>                   places matching a (partial) name (Photon, OSM-based),
+//                                          each with the grid of map parts covering it
+//   POST  {kind: "build", part: "<id>"}    builds that map part from OpenStreetMap if it isn't
+//                                          stored yet, stores it, and returns its id
+//   GET   ?area=<id>&file=<name>           one of an area's map files (world.json, map.json,
+//                                          places.json, eo.json, satellite.jpg)
+//
+// Map files are uploaded by the Python pipeline (npm run maps:upload) and served with long
+// CDN caching, so Snowflake is queried about once per file per day, not on every visit.
 //
 // Runs on the server only (a Vercel function, and the Vite dev server via
 // server/snowflake/vitePlugin.ts), so the Snowflake token never reaches the browser. It talks to
@@ -11,8 +21,13 @@
 //
 // Environment: SNOWFLAKE_ACCOUNT (e.g. MYORG-MYACCOUNT), SNOWFLAKE_TOKEN (required);
 // SNOWFLAKE_WAREHOUSE / _DATABASE / _SCHEMA / _ROLE (optional, defaults match setup.sql).
+// SNOWFLAKE_API_URL (optional) overrides the SQL API address, e.g. for a local test stub.
 //
-// Self-contained on purpose (no local imports) so Vercel can bundle it as is.
+// TypeScript-wise self-contained (Vercel bundles it as is); the map builder and the world grid
+// are plain JavaScript modules shared with the command line and the browser.
+
+import { buildWorld, formatWorldJson } from "../scripts/lib/buildWorld.mjs";
+import { partFromId, partsCovering, type Part } from "../scripts/lib/worldGrid.mjs";
 
 const TIMEOUT_MS = 25_000;
 const RECORD_GAP_MS = 3_000; // per visitor, between writes
@@ -20,11 +35,10 @@ const HISTORY_CACHE_MS = 30_000;
 const MAX_TIMELINE = 150;
 
 class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string,
-  ) {
+  readonly status: number;
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status; // (no parameter properties: Node runs this file directly in scripts)
   }
 }
 
@@ -34,19 +48,233 @@ const env = (globalThis as unknown as { process?: { env: Record<string, string |
 type Value = string | number | boolean | null;
 type Row = Record<string, Value>;
 
-export async function GET(): Promise<Response> {
+export async function GET(request?: Request): Promise<Response> {
   try {
+    const params = new URL(request?.url ?? "http://x/").searchParams;
+    if (params.has("areas")) return json(200, { areas: await listAreas() }, AREA_LIST_CACHE);
+    const search = params.get("search");
+    if (search !== null) return json(200, { places: await searchPlaces(search) }, SEARCH_CACHE);
+    const area = params.get("area");
+    if (area !== null) return await areaFile(area, params.get("file") ?? "");
     return json(200, await history());
   } catch (err) {
     return fail(err);
   }
 }
 
+// --- Maps ------------------------------------------------------------------------------------
+
+const AREA_ID = /^[a-z0-9-]{1,40}$/;
+const FILE_TYPES: Record<string, string> = {
+  "world.json": "application/json",
+  "map.json": "application/json",
+  "places.json": "application/json",
+  "eo.json": "application/json",
+  "satellite.jpg": "image/jpeg",
+};
+// Browsers keep a file 5 min; Vercel's CDN a day (refreshed in the background). Uploads change
+// the area's version, which is part of the file URL, so new maps show up at once.
+const AREA_FILE_CACHE = "public, max-age=300, s-maxage=86400, stale-while-revalidate=604800";
+const AREA_LIST_CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=600";
+
+export interface StoredArea {
+  id: string;
+  name: string;
+  bbox: [number, number, number, number];
+  version: number;
+}
+
+let cachedAreas: { at: number; areas: StoredArea[] } | null = null;
+
+async function listAreas(): Promise<StoredArea[]> {
+  if (cachedAreas && Date.now() - cachedAreas.at < 60_000) return cachedAreas.areas;
+  // One row per area even if two uploads raced (the newest wins).
+  const rows = await query(
+    `SELECT AREA_ID, NAME, SOUTH, WEST, NORTH, EAST, VERSION FROM AREAS QUALIFY ROW_NUMBER() OVER (PARTITION BY AREA_ID ORDER BY VERSION DESC) = 1 ORDER BY NAME`,
+  );
+  const areas: StoredArea[] = rows.map((r) => ({ id: String(r.AREA_ID), name: String(r.NAME), bbox: [n(r.SOUTH), n(r.WEST), n(r.NORTH), n(r.EAST)], version: n(r.VERSION) }));
+  cachedAreas = { at: Date.now(), areas };
+  return areas;
+}
+
+async function areaFile(area: string, file: string): Promise<Response> {
+  const type = FILE_TYPES[file];
+  if (!AREA_ID.test(area) || !type) throw new HttpError(400, "unknown area or file");
+  const [row] = await query(`SELECT ENCODING, CONTENT FROM AREA_FILES WHERE AREA_ID = ? AND FILE = ? LIMIT 1`, [area, file]);
+  if (!row?.CONTENT) throw new HttpError(404, `${area}/${file} is not in Snowflake`);
+  let bytes = base64ToBytes(String(row.CONTENT));
+  if (row.ENCODING === "gzip") bytes = await gunzip(bytes);
+  return new Response(bytes, { status: 200, headers: { "Content-Type": type, "Cache-Control": AREA_FILE_CACHE } });
+}
+
+// --- City search and building parts on demand ------------------------------------------------
+
+const NOMINATIM = "https://nominatim.openstreetmap.org"; // naming a part when it's built
+const PHOTON = "https://photon.komoot.io/api/"; // search as you type
+const UA = "rescue-drone-swarm/1.0 (hackathon search-and-rescue simulation)";
+const SEARCH_CACHE = "public, max-age=3600, s-maxage=86400";
+const BUILD_GAP_MS = 20_000; // per visitor: OpenStreetMap's servers are shared and free
+let building = false; // one build at a time per server instance
+const lastBuild = new Map<string, number>();
+let lastNominatim = 0; // Nominatim asks for at most one request per second
+
+export interface PlaceResult {
+  name: string; // e.g. "Tokyo"
+  label: string; // e.g. "Tokyo, Japan"
+  type: string; // e.g. "city"
+  lat: number;
+  lon: number;
+  parts: Part[][]; // rows north to south; one part = one playable map
+}
+
+async function nominatim(path: string): Promise<unknown> {
+  const wait = lastNominatim + 1100 - Date.now();
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastNominatim = Date.now();
+  const res = await fetch(`${NOMINATIM}${path}`, { headers: { "User-Agent": UA, "Accept-Language": "en" }, signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new HttpError(502, `Place search failed (HTTP ${res.status}); try again in a moment.`);
+  return res.json();
+}
+
+/**
+ * Places matching a (possibly partial) name, for search-as-you-type. Uses Photon (free,
+ * OpenStreetMap-based, made for autocomplete; Nominatim's rules forbid that), limited to
+ * cities, districts, neighbourhoods and counties so "shibu" doesn't suggest bus stops.
+ */
+export async function searchPlaces(q: string): Promise<PlaceResult[]> {
+  const query = q.replace(/\s+/g, " ").trim().slice(0, 100);
+  if (query.length < 2) throw new HttpError(400, "type a place name");
+  const layers = ["city", "district", "locality", "county"].map((l) => `&layer=${l}`).join("");
+  const res = await fetch(`${PHOTON}?q=${encodeURIComponent(query)}&limit=8&lang=en${layers}`, {
+    headers: { "User-Agent": UA },
+    signal: AbortSignal.timeout(8_000),
+  }).catch(() => null);
+  if (!res?.ok) throw new HttpError(502, "Place search is unavailable right now; try again in a moment.");
+  const body = (await res.json()) as {
+    features: {
+      geometry: { coordinates: [number, number] };
+      properties: { name?: string; city?: string; county?: string; state?: string; country?: string; type?: string; extent?: [number, number, number, number] };
+    }[];
+  };
+  const seen = new Set<string>();
+  const out: PlaceResult[] = [];
+  for (const f of body.features) {
+    const p = f.properties;
+    if (!p.name) continue;
+    const [lon, lat] = f.geometry.coordinates;
+    const label = [p.name, p.city, p.state, p.country].filter((v, i, a) => v && a.indexOf(v) === i).join(", ");
+    if (seen.has(label)) continue;
+    seen.add(label);
+    // extent = [minLon, maxLat, maxLon, minLat]; a point (no extent) is one map part.
+    const [w, nn, e, s] = p.extent ?? [lon, lat, lon, lat];
+    out.push({ name: p.name, label, type: p.type ?? "place", lat, lon, parts: partsCovering([s, w, nn, e], [lat, lon]) });
+    if (out.length === 6) break;
+  }
+  return out;
+}
+
+/** A readable name for a part: the neighbourhood and city at its centre. */
+async function partName(p: Part): Promise<string> {
+  try {
+    const r = (await nominatim(`/reverse?format=jsonv2&zoom=14&lat=${p.center[0]}&lon=${p.center[1]}`)) as { address?: Record<string, string> };
+    const a = r.address ?? {};
+    const local = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.town || a.village;
+    const city = a.city || a.town || a.municipality || a.county || a.state;
+    const name = [local, city].filter((v, i, arr) => v && arr.indexOf(v) === i).join(", ");
+    if (name) return name.slice(0, 80);
+  } catch {
+    // fall through to a coordinate name
+  }
+  return `Area ${p.center[0].toFixed(3)}, ${p.center[1].toFixed(3)}`;
+}
+
+export async function buildPart(id: string, visitor: string): Promise<{ id: string; name: string; built: boolean }> {
+  const p = partFromId(id);
+  if (!p) throw new HttpError(400, "unknown map part");
+  const [existing] = await query(`SELECT NAME FROM AREAS WHERE AREA_ID = ? LIMIT 1`, [p.id]);
+  if (existing) return { id: p.id, name: String(existing.NAME), built: false };
+
+  const now = Date.now();
+  if ((lastBuild.get(visitor) ?? 0) + BUILD_GAP_MS > now) throw new HttpError(429, "One new map at a time: wait a few seconds and try again.");
+  if (building) throw new HttpError(429, "Another map is being built right now; try again in a moment.");
+  lastBuild.set(visitor, now);
+  building = true;
+  try {
+    const name = await partName(p);
+    let built;
+    try {
+      built = await buildWorld({ name, bbox: p.bbox, log: () => {}, overpassTimeoutMs: 22_000, attempts: 1 });
+    } catch {
+      throw new HttpError(502, "OpenStreetMap is busy right now; try again in a minute.");
+    }
+    await storeArea(p, name, built.world, built.map, built.buildingCount);
+    return { id: p.id, name, built: true };
+  } finally {
+    building = false;
+  }
+}
+
+export async function storeArea(p: Part, name: string, world: Record<string, unknown> & { meta: { width: number; height: number; cellSizeM: number } }, map: unknown, buildings: number) {
+  const files: [string, string][] = [
+    ["world.json", formatWorldJson(world)],
+    ["map.json", JSON.stringify(map)],
+  ];
+  const population = (world.population as number[]).reduce((a, b) => a + b, 0);
+  await run(`DELETE FROM AREA_FILES WHERE AREA_ID = ?`, textBindings([p.id]));
+  for (const [file, text] of files) {
+    const bytes = new TextEncoder().encode(text);
+    await run(`INSERT INTO AREA_FILES (AREA_ID, FILE, ENCODING, BYTES, CONTENT) SELECT ?, ?, 'gzip', ?, ?`, {
+      ...textBindings([p.id, file]),
+      "3": { type: "FIXED", value: String(bytes.length) },
+      "4": { type: "TEXT", value: bytesToBase64(await gzip(bytes)) },
+    });
+  }
+  await run(`DELETE FROM AREAS WHERE AREA_ID = ?`, textBindings([p.id]));
+  const [S, W, N, E] = p.bbox;
+  const values: [string, string][] = [
+    ["TEXT", p.id], ["TEXT", name], ["REAL", String(S)], ["REAL", String(W)], ["REAL", String(N)], ["REAL", String(E)],
+    ["FIXED", String(world.meta.width)], ["FIXED", String(world.meta.height)], ["REAL", String(world.meta.cellSizeM)],
+    ["FIXED", String(buildings)], ["REAL", String(Math.round(population))], ["FIXED", String(Date.now())],
+  ];
+  await run(
+    `INSERT INTO AREAS (AREA_ID, NAME, SOUTH, WEST, NORTH, EAST, WIDTH, HEIGHT, CELL_SIZE_M, BUILDINGS, POPULATION, VERSION) SELECT ${values.map(() => "?").join(", ")}`,
+    Object.fromEntries(values.map(([type, value], i) => [String(i + 1), { type, value }])),
+  );
+  cachedAreas = null;
+}
+
+export const textBindings = (values: string[]): Bindings => Object.fromEntries(values.map((v, i) => [String(i + 1), { type: "TEXT", value: v }]));
+
+async function gzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function gunzip(bytes: Uint8Array<ArrayBuffer>): Promise<Uint8Array<ArrayBuffer>> {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     config(); // fail early, and cheaply, when Snowflake isn't set up
-    throttle(request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local");
+    const visitor = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
     const body = await request.json().catch(() => null);
+    if ((body as { kind?: string } | null)?.kind === "build") return json(200, await buildPart(String((body as { part?: unknown }).part ?? ""), visitor));
+    throttle(visitor);
     const table = (body as { kind?: string } | null)?.kind === "game" ? "GAMES" : "MISSIONS";
     const row = table === "GAMES" ? parseGame(body) : parseMission(body);
     await insert(table, row);
@@ -164,7 +392,7 @@ function config() {
   if (!/^[A-Za-z0-9._-]+$/.test(account)) throw new HttpError(503, "SNOWFLAKE_ACCOUNT looks wrong (use ORGNAME-ACCOUNTNAME, e.g. MYORG-MYACCOUNT).");
   return {
     // Hostnames can't contain "_": Snowflake uses "-" in place of underscores in account URLs.
-    url: `https://${account.toLowerCase().replace(/_/g, "-").replace(/\.snowflakecomputing\.com$/, "")}.snowflakecomputing.com/api/v2/statements`,
+    url: env.SNOWFLAKE_API_URL || `https://${account.toLowerCase().replace(/_/g, "-").replace(/\.snowflakecomputing\.com$/, "")}.snowflakecomputing.com/api/v2/statements`,
     token,
     warehouse: env.SNOWFLAKE_WAREHOUSE || "RESCUE_WH",
     database: env.SNOWFLAKE_DATABASE || "RESCUE_DRONES",
@@ -173,9 +401,9 @@ function config() {
   };
 }
 
-type Bindings = Record<string, { type: string; value: string | null }>;
+export type Bindings = Record<string, { type: string; value: string | null }>;
 
-async function run(statement: string, bindings?: Bindings): Promise<{ columns: string[]; rows: Value[][] }> {
+export async function run(statement: string, bindings?: Bindings): Promise<{ columns: string[]; rows: Value[][] }> {
   const c = config();
   let res: Response;
   try {
@@ -203,8 +431,9 @@ async function run(statement: string, bindings?: Bindings): Promise<{ columns: s
   return { columns: (body?.resultSetMetaData?.rowType ?? []).map((r) => r.name), rows: body?.data ?? [] };
 }
 
-async function query(statement: string): Promise<Row[]> {
-  const { columns, rows } = await run(statement);
+async function query(statement: string, params: string[] = []): Promise<Row[]> {
+  const bindings: Bindings = Object.fromEntries(params.map((v, i) => [String(i + 1), { type: "TEXT", value: v }]));
+  const { columns, rows } = await run(statement, params.length ? bindings : undefined);
   return rows.map((r) => Object.fromEntries(columns.map((name, i) => [name, r[i] ?? null])));
 }
 
@@ -236,6 +465,6 @@ function fail(err: unknown): Response {
   return json(status, { error: (err as Error).message });
 }
 
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+function json(status: number, body: unknown, cache = "no-store"): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": cache } });
 }

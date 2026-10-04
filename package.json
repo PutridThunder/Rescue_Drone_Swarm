@@ -14,15 +14,16 @@
     "eo:setup": "python3 -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt",
     "eo": "cd pipeline && ../.venv/bin/python -W ignore -m rescue_eo --all",
     "eo:test": "cd pipeline && ../.venv/bin/python -m pytest -q",
-    "area": "node scripts/build-area.mjs"
+    "area": "node scripts/build-area.mjs",
+    "maps:upload": "node scripts/upload-areas.mjs"
   },
   "dependencies": {
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "pngjs": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
     "@types/three": "^0.186.0",
-    "pngjs": "^7.0.0",
     "prettier": "^3.9.9",
     "typescript": "^7.0.2",
     "vite": "^8.3.2",

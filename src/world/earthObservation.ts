@@ -31,7 +31,7 @@ export async function loadEarthObservation(areaId: string, world: World): Promis
       landCover: Uint8Array.from(json.landCover),
       population: Float32Array.from(json.population),
       ndwi: Float32Array.from(json.ndwi, (v) => v / 100),
-      satelliteUrl: json.meta.satellite ? `/areas/${areaId}/${json.meta.satellite}` : null,
+      satelliteUrl: json.meta.satellite ? areaFile(areaId, "satellite.jpg") : null,
       sources: json.meta.sources,
     };
   } catch {

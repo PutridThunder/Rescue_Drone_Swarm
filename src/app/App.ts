@@ -8,7 +8,7 @@ import { QUALITY } from "../render/scene/quality";
 import { Renderer } from "../render/scene/Renderer";
 import { AreaPicker } from "../ui/components/AreaPicker";
 import { Hud } from "../ui/Hud";
-import { areaFile, currentAreaId, importArea, loadAreaIndex, openArea } from "../world/areas";
+import { areaFile, buildPart, currentAreaId, loadBundledAreas, loadStoredAreas, mergeAreas, openArea, searchPlaces } from "../world/areas";
 import { applyEarthObservation, loadEarthObservation } from "../world/earthObservation";
 import { loadMap, loadWorld } from "../world/loadWorld";
 import { hasCoastline, withScenario } from "./config";
@@ -25,7 +25,11 @@ const MAX_FRAME_S = 0.1; // a long pause (tab hidden) doesn't fast-forward the m
 export async function startApp() {
   applyPaletteToCss();
   const areaId = currentAreaId();
-  const [mapWorld, map, areas] = await Promise.all([loadWorld(areaFile(areaId, "world.json")), loadMap(areaFile(areaId, "map.json")), loadAreaIndex()]);
+  // Bundled areas (the default included) load at once; only other areas wait for Snowflake's list.
+  const bundled = await loadBundledAreas();
+  const storedAreas = loadStoredAreas();
+  if (!bundled.some((a) => a.id === areaId)) await storedAreas;
+  const [mapWorld, map] = await Promise.all([loadWorld(areaFile(areaId, "world.json")), loadMap(areaFile(areaId, "map.json"))]);
   // Satellite layers (Python pipeline output) refine the map data when the area has them.
   const eo = await loadEarthObservation(areaId, mapWorld);
   const world = eo ? applyEarthObservation(mapWorld, eo) : mapWorld;
@@ -101,17 +105,14 @@ export async function startApp() {
   const stored = history;
   const challenge = new ChallengeController(runner, droneCam, hud, restart, (score, winner, total, seconds) => void stored.gameDone(score, winner, total, seconds));
 
-  const picker = new AreaPicker(hud.brand.areaButton, areas, areaId, {
+  const picker = new AreaPicker(hud.brand.areaButton, bundled, areaId, {
     onSelect: openArea,
-    async onImport(query) {
-      picker.setStatus(`Finding "${query}" and building its map… (about a minute)`, true);
-      try {
-        openArea(await importArea(query));
-      } catch (err) {
-        picker.setStatus(`Import failed: ${(err as Error).message}`);
-      }
+    search: searchPlaces,
+    async openPart(part) {
+      openArea(await buildPart(part.id)); // returns at once when the part already exists
     },
   });
+  void storedAreas.then((list) => picker.setAreas(mergeAreas(bundled, list)));
 
   // Crowd intel: a new disaster time re-seeds the mission with predicted crowds.
   await CrowdIntelController.create(areaId, world, hud.intelSlot, (crowds) => {

@@ -1,0 +1,8 @@
+.area-parts-map { position: relative; overflow: hidden; border-radius: 10px; background: var(--surface); }
+.parts-tiles img { position: absolute; width: 256px; height: 256px; opacity: 0.85; pointer-events: none; user-select: none; }
+.parts-cell { position: absolute; display: grid; place-items: center; padding: 0; border: 1px solid rgba(47, 111, 237, 0.55); background: rgba(47, 111, 237, 0.06); color: #1d2430; font: 700 10px/1 system-ui, sans-serif; cursor: pointer; }
+.parts-cell span { padding: 1px 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.75); }
+.parts-cell:hover { z-index: 1; border: 2px solid var(--accent); background: rgba(47, 111, 237, 0.22); }
+.parts-cell.ready { background: rgba(31, 158, 98, 0.28); border-color: rgba(31, 158, 98, 0.8); }
+.parts-credit { position: absolute; right: 4px; bottom: 2px; z-index: 2; padding: 0 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.8); color: var(--muted); font-size: 9px; }
+.parts-cell.centre { z-index: 1; border: 2px solid var(--accent); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8) inset; }
