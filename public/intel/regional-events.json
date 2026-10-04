@@ -1,4 +1,4 @@
 {
-  "note": "Big upcoming events outside the map whose crowds ripple into it (offline layer). Add entries by hand, or let the Ticketmaster source find them live.",
+  "note": "Big upcoming events (concerts, games) whose crowds fill their venue and ripple into nearby transit hubs and pubs. Add entries by hand; see RegionalEvent in src/intel/types.ts for the fields.",
   "events": []
 }

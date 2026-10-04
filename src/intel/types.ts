@@ -1,4 +1,4 @@
-// Crowd intelligence shared by the server-side deep search and the browser.
+// Crowd intelligence types: places (bundled per area), scheduled events, and the resulting hotspots.
 
 export type HotspotKind =
   | "event"
@@ -26,7 +26,7 @@ export interface Place {
   capacitySource: "osm" | "estimate";
 }
 
-/** A big event outside the map (e.g. a FIFA match at BC Place) whose crowds ripple into it. */
+/** A big scheduled event (e.g. a game at BC Place) whose crowds fill the venue and ripple outward. */
 export interface RegionalEvent {
   name: string;
   venue: string;
@@ -36,6 +36,7 @@ export interface RegionalEvent {
   durationH: number;
   attendance: number;
   sport: boolean; // sports draw watch parties at local pubs
+  homeGame?: boolean; // the local team plays: pubs fill even more
   source: IntelSource;
 }
 
@@ -58,7 +59,7 @@ export interface Hotspot {
 /** What each data source contributed, shown to the user for transparency. */
 export interface IntelStep {
   source: string;
-  status: "ok" | "skipped" | "error";
+  status: "ok";
   detail: string;
 }
 

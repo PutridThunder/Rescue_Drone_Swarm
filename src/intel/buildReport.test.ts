@@ -48,7 +48,7 @@ describe("regional events", () => {
   const quay: Place = { id: "node/2", name: "Lonsdale Quay", kind: "transit", type: "ferry_terminal", lat: 49.31, lon: -123.08, capacity: 600, capacitySource: "estimate" };
   const pub: Place = { id: "node/3", name: "Local Pub", kind: "dining", type: "pub", lat: 49.311, lon: -123.081, capacity: 200, capacitySource: "estimate" };
   const match = {
-    name: "FIFA World Cup: Canada vs Qatar",
+    name: "Vancouver vs Calgary (hockey)",
     venue: "BC Place",
     lat: 49.2768,
     lon: -123.1119,
@@ -56,6 +56,7 @@ describe("regional events", () => {
     durationH: 2,
     attendance: 54000,
     sport: true,
+    homeGame: true,
     source: { title: "BC Place", url: "https://www.bcplace.com/" },
   };
 
@@ -64,10 +65,10 @@ describe("regional events", () => {
     const normal = buildReport({ places: [quay], at }).hotspots[0];
     const fifa = buildReport({ places: [quay], at, regional: [match] }).hotspots[0];
     expect(fifa.people).toBeGreaterThan(normal.people + 500);
-    expect(fifa.why).toContain("heading to FIFA World Cup: Canada vs Qatar");
+    expect(fifa.why).toContain("heading to Vancouver vs Calgary (hockey)");
   });
 
-  it("local pubs fill up during a Canada match", () => {
+  it("local pubs fill up during a big home game", () => {
     const at = new Date("2026-06-18T16:00:00-07:00");
     expect(buildReport({ places: [pub], at }).hotspots).toHaveLength(0); // quiet weekday afternoon
     const fifa = buildReport({ places: [pub], at, regional: [match] }).hotspots[0];
@@ -79,7 +80,7 @@ describe("transit hubs", () => {
   it("a hub mapped as two nearby points gets the fan surge once", () => {
     const a: Place = { id: "node/10", name: "Lonsdale Quay", kind: "transit", type: "ferry_terminal", lat: 49.3095, lon: -123.0828, capacity: 600, capacitySource: "estimate" };
     const b: Place = { ...a, id: "node/11", name: "", type: "station", capacity: 300, lat: 49.3098 };
-    const match = { name: "FIFA World Cup: Canada vs Qatar", venue: "BC Place", lat: 49.2768, lon: -123.1119, start: "2026-06-18T15:00:00-07:00", durationH: 2, attendance: 54000, sport: true, source: { title: "BC Place", url: "https://www.bcplace.com/" } };
+    const match = { name: "Vancouver vs Calgary (hockey)", venue: "BC Place", lat: 49.2768, lon: -123.1119, start: "2026-06-18T15:00:00-07:00", durationH: 2, attendance: 54000, sport: true, source: { title: "BC Place", url: "https://www.bcplace.com/" } };
     const r = buildReport({ places: [a, b], at: new Date("2026-06-18T13:45:00-07:00"), regional: [match] });
     expect(r.hotspots.filter((h) => h.why.includes("heading to"))).toHaveLength(1);
   });

@@ -8,7 +8,7 @@ const ARRIVAL_H = 2.5; // fans travel in during the 2.5 h before the start
 const DEPARTURE_H = 1.5; // and travel home during the 1.5 h after the end
 const TRANSIT_SHARE = 0.015; // share of attendance present at a North Shore hub at the peak
 const WATCH_PARTY_LEVEL = 0.6; // pubs/restaurants at least this full during a big sports broadcast
-const HOME_TEAM_LEVEL = 0.85; // ...and fuller when Canada plays
+const HOME_TEAM_LEVEL = 0.85; // ...and fuller when the home team plays
 const MIN_ATTENDANCE = 5000;
 const AT_VENUE_DEG = 0.003; // ~300 m: a place this close to the event location is the venue
 const ARRIVED_SHARE = 0.4; // share of the crowd already inside during the arrival window
@@ -56,7 +56,7 @@ export function rippleFor(place: Place, active: ReturnType<typeof activeRegional
       reasons.push(`fans ${phase === "arrival" ? "heading to" : "returning from"} ${label}`);
       source ??= event.source;
     } else if (place.kind === "dining" && event.sport && phase === "during") {
-      floor = Math.max(floor, place.capacity * (/canada/i.test(event.name) ? HOME_TEAM_LEVEL : WATCH_PARTY_LEVEL));
+      floor = Math.max(floor, place.capacity * (event.homeGame ? HOME_TEAM_LEVEL : WATCH_PARTY_LEVEL));
       reasons.push(`watching ${label}`);
       source ??= event.source;
     }

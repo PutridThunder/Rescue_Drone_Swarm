@@ -44,7 +44,7 @@ export function buildReport({ places, at, regional = [], steps = [] }: BuildInpu
     return { place, people: place.capacity * occ.level, reason: occ.reason, confidence: BASE_CONFIDENCE[place.kind], sources: [osmLink(place)] };
   });
 
-  // 2. Big events elsewhere in the region (e.g. FIFA at BC Place) ripple into local hubs and pubs.
+  // 2. Big scheduled events (e.g. a game at BC Place) fill their venue and ripple into local hubs and pubs.
   const active = activeRegionalEvents(regional, at);
   const surgedHubs: Place[] = []; // one fan surge per transit hub, even if OSM maps it as several points
   const byCapacity = [...estimates].sort((x, y) => y.place.capacity - x.place.capacity);
