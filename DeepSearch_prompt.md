@@ -1,5 +1,7 @@
 # DeepSearch Prompt
 
+> Implemented in `api/deepsearch.ts` (the prompt actually sent to Gemini lives there, in `buildPrompt`). Weights are 0.0–1.0 where 0.5 = normal priority; `src/intel/deepSearch.ts` maps them onto the planner's weights.
+
 DeepSearch should take an input of coordinates and a short description of the disaster scenario or desired search conditions, and output a JSON object that assigns float weights (up to 1 decimal place) to a drone search algorithm.
 
 The goal is to estimate which priorities matter most for the target area and mission context, and then produce a relative set of weights for the following factors:
