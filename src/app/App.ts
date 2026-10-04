@@ -70,9 +70,6 @@ export async function startApp() {
         hud.setConfig(runner.config);
         restart();
       },
-      onWeights(w) {
-        runner.applyLive({ weights: { ...runner.config.weights, ...w } });
-      },
       onTool(tool) {
         tools.tool = tool;
         hud.hidePlace();

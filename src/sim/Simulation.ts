@@ -15,6 +15,7 @@ import { MAX_SUBSTEP_CELLS } from "./constants";
 import { SimContext } from "./context";
 import { Drone } from "./drone";
 import { DroneController } from "./droneController";
+import { applyDeepSearchWeights } from "./deepSearch";
 import { applyInfoModes } from "./infoModes";
 import { createMetrics } from "./metrics";
 import { Mission } from "./mission";
@@ -36,6 +37,7 @@ export class Simulation implements ISimulation {
   constructor(world: World, config: SimConfig) {
     const cfg = structuredClone(config);
     const ctx = (this.ctx = new SimContext(world, structuredClone(config), new Rng(cfg.seed)));
+    ctx.cfg.weights = applyDeepSearchWeights(ctx.cfg, ctx.world, ctx.knowledge);
 
     ctx.tsunami = new Tsunami(ctx);
     const searchable = Uint8Array.from(ctx.masks.hidden, (h, i) => (h || !ctx.inArea(i) ? 0 : 1));
@@ -167,12 +169,17 @@ export class Simulation implements ISimulation {
       if (key === "weights" && partial.weights) {
         cfg.weights = { ...cfg.weights, ...partial.weights };
         reasons.push("priority weights changed");
+      } else if (key === "scenario" && partial.scenario !== undefined) {
+        cfg.scenario = partial.scenario;
+        cfg.weights = applyDeepSearchWeights(cfg, this.ctx.world, this.ctx.knowledge);
+        reasons.push("disaster context changed");
       } else if (key === "info" && partial.info) {
         const prev = { ...cfg.info };
         cfg.info = { ...cfg.info, ...partial.info };
         const changed = (Object.keys(cfg.info) as (keyof InfoModes)[]).filter((m) => cfg.info[m] !== prev[m]);
         if (changed.length) {
           applyInfoModes(this.ctx, prev);
+          cfg.weights = applyDeepSearchWeights(cfg, this.ctx.world, this.ctx.knowledge);
           reasons.push(`info ${changed.map((m) => `${m} ${cfg.info[m] ? "ON" : "OFF"}`).join(", ")}`);
         }
       } else if (partial[key] !== undefined) {

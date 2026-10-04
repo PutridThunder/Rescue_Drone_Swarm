@@ -1,0 +1,58 @@
+{
+  "name": "DeepSearch",
+  "type": "mission-priority-model",
+  "version": "1.0",
+  "description": "Produces search weights for a drone fleet from world-layer data, shared knowledge, and disaster context.",
+  "input": {
+    "world_layer": [
+      "meta",
+      "terrain",
+      "elevation",
+      "population",
+      "coastDistance",
+      "base",
+      "obstacleHeight"
+    ],
+    "knowledge_layer": [
+      "known",
+      "searched",
+      "frontier",
+      "hazard"
+    ],
+    "disaster_context": [
+      "scenario",
+      "coastal_target",
+      "time_pressure",
+      "mission_goal"
+    ]
+  },
+  "output": {
+    "coordinates": [49.2827, -123.1207],
+    "scenario": "tsunami warning in a dense coastal urban area with urgent survivor rescue",
+    "weights": {
+      "population": 0.8,
+      "hazard": 0.9,
+      "urgency": 0.9,
+      "unsearched_area": 0.8,
+      "distance_cost": 0.4,
+      "battery_cost": 0.5,
+      "avoid_overlap": 0.6
+    }
+  },
+  "mapping_to_algorithm": {
+    "population": "population",
+    "hazard": "hazard",
+    "urgency": "urgency",
+    "unsearched_area": "information",
+    "distance_cost": "distance",
+    "battery_cost": "battery",
+    "avoid_overlap": "redundancy"
+  },
+  "rules": [
+    "Each weight must be a float between 0.0 and 1.0.",
+    "Round to at most one decimal place.",
+    "Use the world and knowledge layers to estimate risk, density, and gaps in coverage.",
+    "Use disaster context to raise urgency when the mission targets coastlines, flood zones, or time-critical rescue areas.",
+    "Return only valid JSON with the exact output shape."
+  ]
+}

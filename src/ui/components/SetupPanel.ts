@@ -1,7 +1,7 @@
 // Mission setup (left panel): scenario, what the drones know, crowd intel, fleet size, advanced.
 // Reflects the app's config; every change goes back through callbacks (the app owns the config).
 
-import type { InfoModes, Scenario, SimConfig, Weights } from "../../types";
+import type { InfoModes, Scenario, SimConfig } from "../../types";
 import { $, delegate, h } from "../dom";
 import "./SetupPanel.css";
 
@@ -10,7 +10,6 @@ export interface SetupCallbacks {
   onInfo(info: Partial<InfoModes>): void;
   /** Fleet and advanced settings: these restart the mission. */
   onSetup(partial: Partial<SimConfig>): void;
-  onWeights(w: Partial<Weights>): void;
 }
 
 type NumericKey = "droneCount" | "truckCount" | "survivorCount" | "flightAltitudeM" | "sensorRange" | "batteryCapacity";
@@ -32,16 +31,6 @@ const SLIDERS: [NumericKey, string, number, number, number, (v: number) => strin
   ["flightAltitudeM", "Flight altitude", 10, 60, 5, (v) => `${v} m`],
   ["sensorRange", "Camera range", 2, 8, 1, (v) => `${v * 10} m`],
   ["batteryCapacity", "Battery", 500, 3000, 100, (v) => `${(v / 100).toFixed(0)} km`],
-];
-
-const WEIGHTS: [keyof Weights, string][] = [
-  ["population", "Population"],
-  ["hazard", "Hazard"],
-  ["urgency", "Urgency"],
-  ["information", "Unsearched area"],
-  ["distance", "Distance cost"],
-  ["battery", "Battery cost"],
-  ["redundancy", "Avoid overlap"],
 ];
 
 export class SetupPanel {
@@ -90,10 +79,6 @@ export class SetupPanel {
          ${SLIDERS.map(
            ([k, label, min, max, step]) =>
              `<label class="slider"><span>${label}</span><input type="range" data-setting="${k}" min="${min}" max="${max}" step="${step}"><output></output></label>`,
-         ).join("")}
-         <h4>Priority weights</h4>
-         ${WEIGHTS.map(
-           ([k, label]) => `<label class="slider"><span>${label}</span><input type="range" data-weight="${k}" min="0" max="3" step="0.1"><output></output></label>`,
          ).join("")}`,
       ),
     );
@@ -119,11 +104,6 @@ export class SetupPanel {
       const input = $<HTMLInputElement>(r, `[data-setting="${k}"]`);
       input.value = String(config[k]);
       $(input.parentElement!, "output").textContent = fmt(config[k]);
-    }
-    for (const [k] of WEIGHTS) {
-      const input = $<HTMLInputElement>(r, `[data-weight="${k}"]`);
-      input.value = String(config.weights[k]);
-      $(input.parentElement!, "output").textContent = config.weights[k].toFixed(1);
     }
   }
 
@@ -157,9 +137,5 @@ export class SetupPanel {
       $(input.parentElement!, "output").textContent = fmt(Number(input.value));
     });
     delegate<HTMLInputElement>(r, "change", "[data-setting]", (input) => this.cb.onSetup({ [input.dataset.setting as NumericKey]: Number(input.value) }));
-    delegate<HTMLInputElement>(r, "input", "[data-weight]", (input) => {
-      $(input.parentElement!, "output").textContent = Number(input.value).toFixed(1);
-      this.cb.onWeights({ [input.dataset.weight as keyof Weights]: Number(input.value) });
-    });
   }
 }

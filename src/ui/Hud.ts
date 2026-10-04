@@ -7,7 +7,7 @@
 //   └────────────────┘                                          └─────────────────┘
 //   Legend                        Toolbar        PlacePopover · ResultsModal · Toast · MobileTabs
 
-import type { EarthObservation, InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState, Weights } from "../types";
+import type { EarthObservation, InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState } from "../types";
 import { BrandHeader } from "./components/BrandHeader";
 import { DecisionFeed } from "./components/DecisionFeed";
 import { FleetList } from "./components/FleetList";
@@ -34,7 +34,6 @@ export interface HudCallbacks {
   onScenario(s: Scenario): void;
   onInfo(info: Partial<InfoModes>): void;
   onSetup(partial: Partial<SimConfig>): void;
-  onWeights(w: Partial<Weights>): void;
   onTool(tool: Tool): void;
   onFollow(droneId: number | null): void;
   onView(change: Partial<ViewOptions>): void;
