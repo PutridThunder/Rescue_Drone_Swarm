@@ -13,4 +13,11 @@ export function buildWorld(opts: {
   log?: (msg: string) => void;
   overpassTimeoutMs?: number;
   attempts?: number;
+  source?: MapSource | null;
 }): Promise<BuiltWorld>;
+
+/** Overpass-style elements ("out geom"): ways with geometry, relations with member geometry. */
+export interface OsmElements {
+  elements: unknown[];
+}
+export type MapSource = (opts: { bbox: number[]; log: (msg: string) => void }) => Promise<{ buildings: OsmElements; roads: OsmElements; water: OsmElements; land: OsmElements }>;

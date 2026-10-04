@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { GET, history, parseGame, parseMission, POST } from "../../api/snowflake";
+import { GET, history, overtureSource, parseGame, parseMission, POST, toOsm } from "../../api/snowflake";
 import { MissionRecorder } from "./MissionRecorder";
 
 const MISSION = {
@@ -105,6 +105,34 @@ describe("Snowflake storage", () => {
     const res = await POST(post(MISSION, "7.7.7.7"));
     expect(res.status).toBe(502);
     expect((await res.json()).error).toMatch(/refused the token/);
+  });
+
+  it("turns Overture GeoJSON into Overpass-style elements", () => {
+    const square = [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]];
+    const hole = [[0.2, 0.2], [0.4, 0.2], [0.4, 0.4], [0.2, 0.2]];
+    expect(toOsm(JSON.stringify({ type: "Polygon", coordinates: square }), { building: "yes" }, true)[0]).toMatchObject({ type: "way", geometry: [{ lat: 0, lon: 0 }, { lat: 0, lon: 1 }, { lat: 1, lon: 1 }, { lat: 1, lon: 0 }, { lat: 0, lon: 0 }] });
+    const withHole = toOsm(JSON.stringify({ type: "Polygon", coordinates: [square[0], hole] }), { natural: "water" }, false)[0];
+    expect(withHole.type).toBe("relation");
+    expect(withHole.members!.map((m) => m.role)).toEqual(["outer", "inner"]);
+    expect(toOsm(JSON.stringify({ type: "MultiPolygon", coordinates: [square, square] }), { building: "yes" }, true)).toHaveLength(2);
+    expect(toOsm(JSON.stringify({ type: "MultiLineString", coordinates: [[[0, 0], [1, 1]], [[1, 1], [2, 2]]] }), { highway: "primary" }, true)).toHaveLength(2);
+    expect(toOsm("not json", {}, true)).toEqual([]);
+  });
+
+  it("reads Overture views across result partitions and after a 202", async () => {
+    const building = JSON.stringify({ type: "Polygon", coordinates: [[[-123.08, 49.31], [-123.079, 49.31], [-123.079, 49.311], [-123.08, 49.31]]] });
+    const rows = (n: number) => Array.from({ length: n }, () => [building, "12", null, "house"]);
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("?partition=1")) return Response.json({ data: rows(3) });
+      if (url.includes("/statements/h1")) return Response.json({ statementHandle: "h1", resultSetMetaData: { rowType: [{ name: "G" }, { name: "HEIGHT" }, { name: "LEVELS" }, { name: "KIND" }], partitionInfo: [{}, {}] }, data: rows(2) });
+      const s = JSON.parse(init!.body as string).statement as string;
+      if (s.includes("OV_BUILDINGS")) return Response.json({ statementHandle: "h1" }, { status: 202 });
+      return Response.json({ resultSetMetaData: { rowType: [{ name: "G" }] }, data: [] });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await overtureSource({ bbox: [49.3, -123.1, 49.32, -123.06] });
+    expect(out.buildings.elements).toHaveLength(5); // 2 in the first partition + 3 in the second
+    expect((out.buildings.elements[0] as { tags: Record<string, string> }).tags).toEqual({ building: "house", height: "12" });
   });
 
   it("records a mission timeline every 10 simulated seconds", () => {

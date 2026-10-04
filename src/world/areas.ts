@@ -86,8 +86,8 @@ export async function searchPlaces(query: string): Promise<PlaceResult[]> {
 }
 
 /** Make sure a map part exists (building it from OpenStreetMap if needed). Resolves to its id. */
-export async function buildPart(partId: string): Promise<string> {
-  const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "build", part: partId }) }).catch(() => null);
+export async function buildPart(partId: string, name: string): Promise<string> {
+  const res = await fetch(API, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "build", part: partId, name }) }).catch(() => null);
   const body = (await res?.json().catch(() => null)) as { id?: string; error?: string } | null;
   if (!res?.ok || !body?.id) throw new Error(body?.error ?? "Couldn't reach the server.");
   return body.id;

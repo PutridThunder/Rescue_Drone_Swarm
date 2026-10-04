@@ -12,8 +12,8 @@ import "./AreaPicker.css";
 export interface AreaPickerCallbacks {
   onSelect(id: string): void;
   search(query: string): Promise<PlaceResult[]>;
-  /** Open a map part, building it first if needed. */
-  openPart(part: Part): Promise<void>;
+  /** Open a map part, building it first if needed; `name` labels a newly built one. */
+  openPart(part: Part, name: string): Promise<void>;
 }
 
 const LIST_LIMIT = 12;
@@ -152,6 +152,7 @@ export class AreaPicker {
 
   /** One part: open it. Several: show them on a map to choose from. */
   private choose(place: PlaceResult) {
+    this.place = place;
     const all = place.parts.flat();
     if (all.length === 1) return void this.pick(all[0]);
     $(this.menu, ".area-parts-title").textContent = `${place.name} is ${all.length} maps. Pick the part to search, or:`;
@@ -162,6 +163,8 @@ export class AreaPicker {
     this.status("");
   }
 
+  private place: PlaceResult | null = null;
+
   private async pick(part: Part) {
     if (this.busy) return;
     const ready = this.areas.some((a) => a.id === part.id);
@@ -169,12 +172,22 @@ export class AreaPicker {
     this.menu.classList.add("is-busy");
     this.status(ready ? "Opening…" : "Building this map from OpenStreetMap (about 20–40 s)…");
     try {
-      await this.cb.openPart(part);
+      await this.cb.openPart(part, this.partName(part));
     } catch (err) {
       this.status((err as Error).message, true);
       this.busy = false;
       this.menu.classList.remove("is-busy");
     }
+  }
+
+  /** "Shibuya · B2": the searched place plus the part's grid label. */
+  private partName(part: Part): string {
+    const place = this.place;
+    if (!place) return "";
+    const row = place.parts.findIndex((r) => r.some((p) => p.id === part.id));
+    const col = row >= 0 ? place.parts[row].findIndex((p) => p.id === part.id) : -1;
+    const label = place.parts.flat().length > 1 && row >= 0 ? ` · ${"ABCDEFGHIJKLMNOPQRSTUVWXYZ"[col] ?? col + 1}${row + 1}` : "";
+    return `${place.label.split(",").slice(0, 2).join(",")}${label}`;
   }
 
   private status(message: string, error = false) {

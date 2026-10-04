@@ -1,5 +1,5 @@
 // Buildings extruded from real OSM footprints. Each building is recoloured as the fleet searches
-// the cells under it: grey (not searched) -> white (searched), tinted in hazard zones. Windows,
+// the cells under it: grey (not searched) -> green (searched), tinted in hazard zones. Windows,
 // shading and outlines come from buildingMaterial.ts and a merged outline mesh.
 
 import * as THREE from "three";

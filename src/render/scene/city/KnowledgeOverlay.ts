@@ -1,5 +1,6 @@
 // A transparent texture over the terrain (one texel per cell) showing what the fleet knows:
-// fog where nothing is known, a grey veil where unsearched, blue frontier, red hazard, orange
+// fog where nothing is known, a grey veil where unsearched, green where searched (cleared),
+// blue frontier, red hazard, orange
 // population (when that intel is on), the flood after a tsunami, and a dark veil outside the
 // drawn search area.
 
@@ -130,6 +131,9 @@ export class KnowledgeOverlay {
       const unsearched = Math.max(0, 1 - k.searched[i] / SEARCHED);
       if (!k.known[i]) this.blend(SCENE.fogUnknown, 1);
       else this.blend(SCENE.fogUnsearched, unsearched);
+      // Cleared ground turns green; it fades in over the last stretch to the searched threshold.
+      const cleared = Math.min(1, Math.max(0, (k.searched[i] / SEARCHED - 0.5) * 2));
+      if (cleared > 0) this.blend(SCENE.searched, cleared);
       if (this.populationOn) {
         const people = this.world.population[i] + this.crowdBoost[i];
         if (people > 0) this.blend(SCENE.population, Math.min(1, people / POPULATION_FULL) * (0.35 + 0.65 * unsearched));

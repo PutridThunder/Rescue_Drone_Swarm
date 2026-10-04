@@ -19,6 +19,37 @@ const MIRRORS = [
 const hash = (s) =>
   crypto.createHash("sha1").update(s).digest("hex").slice(0, 16);
 
+// What we take from OpenStreetMap, as Overpass statements, and the same selection as filters
+// (to split one combined response back into the four kinds).
+const ROAD_CLASSES = /^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$/;
+const OSM_QUERIES = {
+  buildings: 'way["building"];relation["building"]["type"="multipolygon"];',
+  roads: `way["highway"~"${ROAD_CLASSES.source}"];`,
+  water: 'way["natural"="water"];relation["natural"="water"];way["natural"="coastline"];way["waterway"="riverbank"];relation["waterway"="riverbank"];way["waterway"="river"];',
+  land:
+    'way["leisure"~"^(park|garden|nature_reserve|golf_course|pitch|playground|recreation_ground)$"];relation["leisure"~"^(park|nature_reserve|golf_course)$"];' +
+    'way["landuse"~"^(forest|grass|meadow|cemetery|recreation_ground|village_green|residential|commercial|industrial|retail)$"];relation["landuse"~"^(forest|grass|residential|commercial|industrial|retail)$"];' +
+    'way["natural"~"^(wood|scrub|grassland|heath)$"];relation["natural"~"^(wood|scrub)$"];',
+};
+const isWay = (el) => el.type === "way";
+const isRel = (el) => el.type === "relation";
+const OSM_KINDS = {
+  buildings: (el) => !!el.tags.building && (isWay(el) || (isRel(el) && el.tags.type === "multipolygon")),
+  roads: (el) => isWay(el) && ROAD_CLASSES.test(el.tags.highway ?? ""),
+  water: (el) =>
+    (el.tags.natural === "water" && (isWay(el) || isRel(el))) ||
+    (isWay(el) && el.tags.natural === "coastline") ||
+    (el.tags.waterway === "riverbank" && (isWay(el) || isRel(el))) ||
+    (isWay(el) && el.tags.waterway === "river"),
+  land: (el) =>
+    (isWay(el) && /^(park|garden|nature_reserve|golf_course|pitch|playground|recreation_ground)$/.test(el.tags.leisure ?? "")) ||
+    (isRel(el) && /^(park|nature_reserve|golf_course)$/.test(el.tags.leisure ?? "")) ||
+    (isWay(el) && /^(forest|grass|meadow|cemetery|recreation_ground|village_green|residential|commercial|industrial|retail)$/.test(el.tags.landuse ?? "")) ||
+    (isRel(el) && /^(forest|grass|residential|commercial|industrial|retail)$/.test(el.tags.landuse ?? "")) ||
+    (isWay(el) && /^(wood|scrub|grassland|heath)$/.test(el.tags.natural ?? "")) ||
+    (isRel(el) && /^(wood|scrub)$/.test(el.tags.natural ?? "")),
+};
+
 /** A --size-km rectangle (default 2.5 x 2.1 km) centred on lat/lon, as [S, W, N, E]. */
 export function bboxAround(lat, lon, sizeKm = "2.5x2.1") {
   const [wKm, hKm] = sizeKm.split("x").map(Number);
@@ -66,9 +97,11 @@ export function formatWorldJson(json) {
  * @param {(msg: string) => void} [opts.log]
  * @param {number} [opts.overpassTimeoutMs]
  * @param {number} [opts.attempts]     tries per Overpass mirror
+ * @param {Function} [opts.source]     async ({bbox, log}) => {buildings, roads, water, land}, each
+ *                                     {elements} in Overpass "out geom" form; default: Overpass
  * @returns {Promise<{world: object, map: object, buildingCount: number}>}
  */
-export async function buildWorld({ name, bbox, staging = null, cacheDir = null, log = console.log, overpassTimeoutMs = 240_000, attempts = 2 }) {
+export async function buildWorld({ name, bbox, staging = null, cacheDir = null, log = console.log, overpassTimeoutMs = 240_000, attempts = 2, source = null }) {
   if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true });
   const [S, W, N, E] = bbox;
   const CELL = 10;
@@ -112,6 +145,12 @@ export async function buildWorld({ name, bbox, staging = null, cacheDir = null, 
       }
     }
     throw new Error(`All Overpass mirrors failed for ${name}`);
+  }
+
+  async function fetchOsm() {
+    const all = await overpass("all", Object.values(OSM_QUERIES).join(""));
+    const pick = (test) => ({ elements: all.elements.filter((el) => el.tags && test(el)) });
+    return { buildings: pick(OSM_KINDS.buildings), roads: pick(OSM_KINDS.roads), water: pick(OSM_KINDS.water), land: pick(OSM_KINDS.land) };
   }
 
   async function tile(z, x, y) {
@@ -242,27 +281,9 @@ export async function buildWorld({ name, bbox, staging = null, cacheDir = null, 
   log(`Grid ${WIDTH} x ${HEIGHT} (${NCELLS} cells, ${CELL} m)`);
 
   log("Fetching OSM...");
-  // The four queries run in parallel (each falls back across mirrors on its own).
-  const [buildings, roads, water, land] = await Promise.all([
-    overpass(
-    "buildings",
-    'way["building"];relation["building"]["type"="multipolygon"];',
-    ),
-    overpass(
-    "roads",
-    'way["highway"~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|secondary_link|tertiary_link)$"];',
-    ),
-    overpass(
-    "water",
-    'way["natural"="water"];relation["natural"="water"];way["natural"="coastline"];way["waterway"="riverbank"];relation["waterway"="riverbank"];way["waterway"="river"];',
-    ),
-    overpass(
-    "landuse",
-    'way["leisure"~"^(park|garden|nature_reserve|golf_course|pitch|playground|recreation_ground)$"];relation["leisure"~"^(park|nature_reserve|golf_course)$"];' +
-      'way["landuse"~"^(forest|grass|meadow|cemetery|recreation_ground|village_green|residential|commercial|industrial|retail)$"];relation["landuse"~"^(forest|grass|residential|commercial|industrial|retail)$"];' +
-      'way["natural"~"^(wood|scrub|grassland|heath)$"];relation["natural"~"^(wood|scrub)$"];',
-    ),
-  ]);
+  // Map data: from `source` when given (e.g. Overture Maps in Snowflake), else one combined
+  // Overpass request (one slot on the shared server instead of four), split by kind here.
+  const { buildings, roads, water, land } = source ? await source({ bbox: [S, W, N, E], log }) : await fetchOsm();
 
   log("Fetching elevation tiles...");
   const Z = 15;

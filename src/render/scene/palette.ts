@@ -7,14 +7,15 @@ export const SCENE = {
   water: 0x6f9fc8,
   tree: 0x6fae5a,
   road: 0xffffff,
-  buildingUnsearched: 0xcdd3dc,
-  buildingSearched: 0xffffff,
+  buildingUnsearched: 0xc5ccd7,
+  buildingSearched: 0xc9efd9, // cleared: soft green, matches the searched ground tint
   buildingTall: 0xb3bfd0, // above flight altitude: drones must go around
   buildingHazard: 0xf1b3a6,
   buildingEdge: 0x6d7687, // roof outlines and corners
   buildingOutsideArea: 0x9aa1ad, // outside the drawn search circle
   fogUnknown: [0x6b7385, 0.5] as const,
-  fogUnsearched: [0x8d97a8, 0.2] as const,
+  fogUnsearched: [0x7d8798, 0.3] as const,
+  searched: [0x17a673, 0.3] as const, // cleared ground
   frontier: [0x2f6fed, 0.38] as const,
   hazard: [0xe8503f, 0.26] as const,
   population: [0xf29d38, 0.55] as const,
@@ -55,8 +56,8 @@ function mix(a: number, b: number, t: number): number {
 /** Publish map colours as CSS variables so the legend always matches the 3D scene. */
 export function applyPaletteToCss(root: HTMLElement = document.documentElement) {
   const vars: Record<string, number> = {
-    "--map-unsearched": SCENE.buildingUnsearched,
-    "--map-searched": SCENE.buildingSearched,
+    "--map-unsearched": mix(SCENE.ground, SCENE.fogUnsearched[0], 0.45),
+    "--map-searched": mix(SCENE.ground, SCENE.searched[0], 0.45),
     "--map-frontier": mix(SCENE.ground, SCENE.frontier[0], 0.6),
     "--map-tall": SCENE.buildingTall,
     "--map-survivor": SCENE.survivorFound,

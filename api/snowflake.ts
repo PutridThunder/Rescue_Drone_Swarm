@@ -6,8 +6,8 @@
 //   GET   ?areas                           the areas stored in Snowflake (id, name, bbox, version)
 //   GET   ?search=<city>                   places matching a (partial) name (Photon, OSM-based),
 //                                          each with the grid of map parts covering it
-//   POST  {kind: "build", part: "<id>"}    builds that map part from OpenStreetMap if it isn't
-//                                          stored yet, stores it, and returns its id
+//   POST  {kind: "build", part, name}      builds that map part (from Overture Maps in Snowflake)
+//                                          if it isn't stored yet, stores it, returns its id
 //   GET   ?area=<id>&file=<name>           one of an area's map files (world.json, map.json,
 //                                          places.json, eo.json, satellite.jpg)
 //
@@ -36,9 +36,12 @@ const MAX_TIMELINE = 150;
 
 class HttpError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** The Overture views aren't in Snowflake yet (or the app can't read them). */
+  readonly overtureMissing: boolean;
+  constructor(status: number, message: string, overtureMissing = false) {
     super(message);
     this.status = status; // (no parameter properties: Node runs this file directly in scripts)
+    this.overtureMissing = overtureMissing;
   }
 }
 
@@ -109,14 +112,12 @@ async function areaFile(area: string, file: string): Promise<Response> {
 
 // --- City search and building parts on demand ------------------------------------------------
 
-const NOMINATIM = "https://nominatim.openstreetmap.org"; // naming a part when it's built
 const PHOTON = "https://photon.komoot.io/api/"; // search as you type
 const UA = "rescue-drone-swarm/1.0 (hackathon search-and-rescue simulation)";
 const SEARCH_CACHE = "public, max-age=3600, s-maxage=86400";
 const BUILD_GAP_MS = 20_000; // per visitor: OpenStreetMap's servers are shared and free
 let building = false; // one build at a time per server instance
 const lastBuild = new Map<string, number>();
-let lastNominatim = 0; // Nominatim asks for at most one request per second
 
 export interface PlaceResult {
   name: string; // e.g. "Tokyo"
@@ -125,15 +126,6 @@ export interface PlaceResult {
   lat: number;
   lon: number;
   parts: Part[][]; // rows north to south; one part = one playable map
-}
-
-async function nominatim(path: string): Promise<unknown> {
-  const wait = lastNominatim + 1100 - Date.now();
-  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-  lastNominatim = Date.now();
-  const res = await fetch(`${NOMINATIM}${path}`, { headers: { "User-Agent": UA, "Accept-Language": "en" }, signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new HttpError(502, `Place search failed (HTTP ${res.status}); try again in a moment.`);
-  return res.json();
 }
 
 /**
@@ -173,22 +165,7 @@ export async function searchPlaces(q: string): Promise<PlaceResult[]> {
   return out;
 }
 
-/** A readable name for a part: the neighbourhood and city at its centre. */
-async function partName(p: Part): Promise<string> {
-  try {
-    const r = (await nominatim(`/reverse?format=jsonv2&zoom=14&lat=${p.center[0]}&lon=${p.center[1]}`)) as { address?: Record<string, string> };
-    const a = r.address ?? {};
-    const local = a.suburb || a.neighbourhood || a.quarter || a.city_district || a.town || a.village;
-    const city = a.city || a.town || a.municipality || a.county || a.state;
-    const name = [local, city].filter((v, i, arr) => v && arr.indexOf(v) === i).join(", ");
-    if (name) return name.slice(0, 80);
-  } catch {
-    // fall through to a coordinate name
-  }
-  return `Area ${p.center[0].toFixed(3)}, ${p.center[1].toFixed(3)}`;
-}
-
-export async function buildPart(id: string, visitor: string): Promise<{ id: string; name: string; built: boolean }> {
+export async function buildPart(id: string, visitor: string, requestedName = ""): Promise<{ id: string; name: string; built: boolean; source?: string }> {
   const p = partFromId(id);
   if (!p) throw new HttpError(400, "unknown map part");
   const [existing] = await query(`SELECT NAME FROM AREAS WHERE AREA_ID = ? LIMIT 1`, [p.id]);
@@ -200,17 +177,116 @@ export async function buildPart(id: string, visitor: string): Promise<{ id: stri
   lastBuild.set(visitor, now);
   building = true;
   try {
-    const name = await partName(p);
+    // The name comes from the search ("Shibuya · B2"), so no naming service is needed.
+    const name = requestedName.replace(/\s+/g, " ").trim().slice(0, 80) || `Area ${p.center[0].toFixed(3)}, ${p.center[1].toFixed(3)}`;
+    // The world's map data is in Snowflake (Overture Maps, snowflake/overture.sql). Only if it
+    // isn't set up yet does the build fall back to OpenStreetMap's public servers.
+    let source = "overture";
     let built;
     try {
-      built = await buildWorld({ name, bbox: p.bbox, log: () => {}, overpassTimeoutMs: 22_000, attempts: 1 });
-    } catch {
-      throw new HttpError(502, "OpenStreetMap is busy right now; try again in a minute.");
+      built = await buildWorld({ name, bbox: p.bbox, log: () => {}, source: overtureSource });
+    } catch (err) {
+      if (!(err instanceof HttpError && err.overtureMissing)) throw err;
+      console.warn("Overture views not found in Snowflake; building from OpenStreetMap instead (run snowflake/overture.sql).");
+      source = "openstreetmap";
+      try {
+        built = await buildWorld({ name, bbox: p.bbox, log: () => {}, overpassTimeoutMs: 40_000, attempts: 1 });
+      } catch {
+        throw new HttpError(502, "OpenStreetMap is busy and the world map isn't in Snowflake yet (run snowflake/overture.sql).");
+      }
     }
     await storeArea(p, name, built.world, built.map, built.buildingCount);
-    return { id: p.id, name, built: true };
+    return { id: p.id, name, built: true, source };
   } finally {
     building = false;
+  }
+}
+
+// --- Overture Maps in Snowflake as the map source ---------------------------------------------
+
+const GREEN = /^(park|recreation|recreation_ground|garden|golf_course|pitch|playground|nature_reserve|cemetery|grass|grassland|meadow|forest|wood|wetland|scrub|shrub|heath|village_green|protected|national_park)$/;
+const ZONES = /^(residential|commercial|industrial|retail)$/;
+const ROADS = ["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified", "residential", "living_street"];
+
+type LatLon = { lat: number; lon: number };
+type OsmLike = { type: "way" | "relation"; tags: Record<string, string>; geometry?: LatLon[]; members?: { type: "way"; role: string; geometry: LatLon[] }[] };
+
+/** Map data for a bounding box, read from the Overture views and shaped like Overpass output. */
+export async function overtureSource({ bbox }: { bbox: number[] }) {
+  const [S, W, N, E] = bbox;
+  const area = `POLYGON((${W} ${S}, ${E} ${S}, ${E} ${N}, ${W} ${N}, ${W} ${S}))`;
+  // Numbers prune to the few micro-partitions near the part; ST_INTERSECTS then keeps exact hits.
+  const inside = `XMIN <= ? AND XMAX >= ? AND YMIN <= ? AND YMAX >= ? AND ST_INTERSECTS(GEOMETRY, TO_GEOGRAPHY(?))`;
+  const params = [String(E), String(W), String(N), String(S), area];
+  const select = async (sql: string) => {
+    try {
+      return await query(sql, params);
+    } catch (err) {
+      if (err instanceof HttpError && /does not exist|not authorized/i.test(err.message)) throw new HttpError(503, err.message, true);
+      throw err;
+    }
+  };
+  const [b, r, w, l] = await Promise.all([
+    select(`SELECT ST_ASGEOJSON(GEOMETRY)::STRING AS G, HEIGHT, LEVELS, KIND FROM OV_BUILDINGS WHERE ${inside}`),
+    select(`SELECT ST_ASGEOJSON(GEOMETRY)::STRING AS G, CLASS, NAME FROM OV_ROADS WHERE CLASS IN (${ROADS.map((c) => `'${c}'`).join(", ")}) AND ${inside}`),
+    select(`SELECT ST_ASGEOJSON(GEOMETRY)::STRING AS G, KIND FROM OV_WATER WHERE ${inside}`),
+    select(`SELECT ST_ASGEOJSON(GEOMETRY)::STRING AS G, KIND FROM OV_LAND WHERE ${inside}`),
+  ]);
+  const buildings = b.flatMap((row) =>
+    toOsm(row.G, { building: String(row.KIND ?? "yes"), ...(row.HEIGHT != null ? { height: String(row.HEIGHT) } : {}), ...(row.LEVELS != null ? { "building:levels": String(row.LEVELS) } : {}) }, true),
+  );
+  const roads = r.flatMap((row) => toOsm(row.G, { highway: String(row.CLASS), ...(row.NAME ? { name: String(row.NAME) } : {}) }, true));
+  const water = w.flatMap((row) => {
+    const kind = String(row.KIND ?? "");
+    const g = parse(row.G);
+    if (!g) return [];
+    const lines = g.type === "LineString" || g.type === "MultiLineString";
+    if (lines) return /^(river|canal|stream)$/.test(kind) ? toOsm(row.G, { waterway: "river" }, true) : [];
+    return toOsm(row.G, { natural: "water" }, false);
+  });
+  const land = l.flatMap((row) => {
+    const kind = String(row.KIND ?? "");
+    if (ZONES.test(kind)) return toOsm(row.G, { landuse: kind }, false);
+    return GREEN.test(kind) ? toOsm(row.G, { leisure: "park" }, false) : [];
+  });
+  return { buildings: { elements: buildings }, roads: { elements: roads }, water: { elements: water }, land: { elements: land } };
+}
+
+function parse(g: Value | undefined): { type: string; coordinates: unknown } | null {
+  try {
+    return g == null ? null : (JSON.parse(String(g)) as { type: string; coordinates: unknown });
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * GeoJSON -> Overpass-style elements: lines and single-ring polygons become ways; polygons with
+ * holes (and, unless `split`, multipolygons) become relations with outer/inner members.
+ */
+export function toOsm(geojson: Value | undefined, tags: Record<string, string>, split: boolean): OsmLike[] {
+  const g = parse(geojson);
+  if (!g) return [];
+  const ring = (coords: [number, number][]): LatLon[] => coords.map(([lon, lat]) => ({ lat, lon }));
+  const polygon = (rings: [number, number][][]): OsmLike =>
+    rings.length === 1
+      ? { type: "way", tags, geometry: ring(rings[0]) }
+      : { type: "relation", tags: { ...tags, type: "multipolygon" }, members: rings.map((r, i) => ({ type: "way", role: i === 0 ? "outer" : "inner", geometry: ring(r) })) };
+  switch (g.type) {
+    case "LineString":
+      return [{ type: "way", tags, geometry: ring(g.coordinates as [number, number][]) }];
+    case "MultiLineString":
+      return (g.coordinates as [number, number][][]).map((c) => ({ type: "way", tags, geometry: ring(c) }));
+    case "Polygon":
+      return [polygon(g.coordinates as [number, number][][])];
+    case "MultiPolygon": {
+      const polys = g.coordinates as [number, number][][][];
+      if (split) return polys.map(polygon);
+      const members = polys.flatMap((rings) => rings.map((r, i) => ({ type: "way" as const, role: i === 0 ? "outer" : "inner", geometry: ring(r) })));
+      return [{ type: "relation", tags: { ...tags, type: "multipolygon" }, members }];
+    }
+    default:
+      return [];
   }
 }
 
@@ -273,7 +349,10 @@ export async function POST(request: Request): Promise<Response> {
     config(); // fail early, and cheaply, when Snowflake isn't set up
     const visitor = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "local";
     const body = await request.json().catch(() => null);
-    if ((body as { kind?: string } | null)?.kind === "build") return json(200, await buildPart(String((body as { part?: unknown }).part ?? ""), visitor));
+    if ((body as { kind?: string } | null)?.kind === "build") {
+      const b = body as { part?: unknown; name?: unknown };
+      return json(200, await buildPart(String(b.part ?? ""), visitor, typeof b.name === "string" ? b.name : ""));
+    }
     throttle(visitor);
     const table = (body as { kind?: string } | null)?.kind === "game" ? "GAMES" : "MISSIONS";
     const row = table === "GAMES" ? parseGame(body) : parseMission(body);
@@ -405,30 +484,55 @@ export type Bindings = Record<string, { type: string; value: string | null }>;
 
 export async function run(statement: string, bindings?: Bindings): Promise<{ columns: string[]; rows: Value[][] }> {
   const c = config();
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization: `Bearer ${c.token}`,
+    "X-Snowflake-Authorization-Token-Type": "PROGRAMMATIC_ACCESS_TOKEN",
+    "User-Agent": "rescue-drone-swarm/1.0",
+  };
+  let body = await call(c.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ statement, timeout: 45, database: c.database, schema: c.schema, warehouse: c.warehouse, role: c.role, ...(bindings ? { bindings } : {}) }),
+  });
+  // 202: still running (e.g. the warehouse is waking up): poll until it's done.
+  for (let tries = 0; body.status === 202 && tries < 20; tries++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    body = await call(`${c.url}/${body.json.statementHandle}`, { headers });
+  }
+  const meta = body.json.resultSetMetaData;
+  const rows = body.json.data ?? [];
+  // Large results come in partitions; the first is in the response, fetch the rest.
+  const partitions = meta?.partitionInfo?.length ?? 1;
+  for (let p = 1; p < partitions; p++) {
+    const part = await call(`${c.url}/${body.json.statementHandle}?partition=${p}`, { headers });
+    rows.push(...(part.json.data ?? []));
+  }
+  return { columns: (meta?.rowType ?? []).map((r) => r.name), rows };
+}
+
+interface SqlApiBody {
+  message?: string;
+  statementHandle?: string;
+  data?: Value[][];
+  resultSetMetaData?: { rowType?: { name: string }[]; partitionInfo?: unknown[] };
+}
+
+async function call(url: string, init: RequestInit): Promise<{ status: number; json: SqlApiBody }> {
   let res: Response;
   try {
-    res = await fetch(c.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${c.token}`,
-        "X-Snowflake-Authorization-Token-Type": "PROGRAMMATIC_ACCESS_TOKEN",
-        "User-Agent": "rescue-drone-swarm/1.0",
-      },
-      body: JSON.stringify({ statement, timeout: 30, database: c.database, schema: c.schema, warehouse: c.warehouse, role: c.role, ...(bindings ? { bindings } : {}) }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    res = await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
     throw new HttpError(502, "Could not reach Snowflake (check SNOWFLAKE_ACCOUNT).");
   }
-  const body = (await res.json().catch(() => null)) as { message?: string; data?: Value[][]; resultSetMetaData?: { rowType?: { name: string }[] } } | null;
+  const json = ((await res.json().catch(() => null)) ?? {}) as SqlApiBody;
   if (!res.ok) {
-    console.error("Snowflake error", res.status, body?.message);
-    if (res.status === 401 || res.status === 403) throw new HttpError(502, `Snowflake refused the token (${res.status}): ${body?.message ?? "check SNOWFLAKE_TOKEN and its expiry"}`);
-    throw new HttpError(502, `Snowflake error ${res.status}: ${body?.message ?? res.statusText}`);
+    console.error("Snowflake error", res.status, json.message);
+    if (res.status === 401 || res.status === 403) throw new HttpError(502, `Snowflake refused the token (${res.status}): ${json.message ?? "check SNOWFLAKE_TOKEN and its expiry"}`);
+    throw new HttpError(502, `Snowflake error ${res.status}: ${json.message ?? res.statusText}`);
   }
-  return { columns: (body?.resultSetMetaData?.rowType ?? []).map((r) => r.name), rows: body?.data ?? [] };
+  return { status: res.status, json };
 }
 
 async function query(statement: string, params: string[] = []): Promise<Row[]> {

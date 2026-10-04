@@ -108,8 +108,8 @@ export async function startApp() {
   const picker = new AreaPicker(hud.brand.areaButton, bundled, areaId, {
     onSelect: openArea,
     search: searchPlaces,
-    async openPart(part) {
-      openArea(await buildPart(part.id)); // returns at once when the part already exists
+    async openPart(part, name) {
+      openArea(await buildPart(part.id, name)); // returns at once when the part already exists
     },
   });
   void storedAreas.then((list) => picker.setAreas(mergeAreas(bundled, list)));
