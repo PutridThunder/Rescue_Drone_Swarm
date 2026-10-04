@@ -1,6 +1,7 @@
 import { Terrain } from "../shared/terrain";
 import type { SurvivorView } from "../types";
-import { DETECT_PROB, DIRTY_STEPS, FACADE_GAIN, REDUNDANT_ABOVE, REVISIT_GAP, SEARCHED_THRESHOLD } from "./constants";
+import { CANOPY_GAIN, DETECT_PROB, DIRTY_STEPS, FACADE_GAIN, REDUNDANT_ABOVE, REVISIT_GAP, SEARCHED_THRESHOLD } from "./constants";
+import { LandCover } from "../world/earthObservation";
 import type { SimContext } from "./context";
 import type { Drone } from "./drone";
 import { buildSensorDisc, type SensorDisc } from "./knowledge";
@@ -16,8 +17,13 @@ export class Sensor {
   /** Set when an observation reveals a new obstacle; paths are re-checked after the sub-step. */
   obstacleDiscovered = false;
 
+  /** Cells under tree canopy (from satellite land cover), if available. */
+  private readonly canopy: Uint8Array | null;
+
   constructor(private readonly ctx: SimContext) {
     this.disc = buildSensorDisc(ctx.cfg.sensorRange);
+    const cover = ctx.world.eo?.landCover;
+    this.canopy = cover ? Uint8Array.from(cover, (c) => (c === LandCover.Trees ? 1 : 0)) : null;
   }
 
   observe(d: Drone) {
@@ -47,7 +53,7 @@ export class Sensor {
         }
       }
       const before = searched[i];
-      const p = tall[i] ? gain[j] * FACADE_GAIN : gain[j];
+      const p = gain[j] * (tall[i] ? FACADE_GAIN : 1) * (this.canopy?.[i] ? CANOPY_GAIN : 1);
       const after = before + (1 - before) * p;
       searched[i] = after;
       if (((before * DIRTY_STEPS) | 0) !== ((after * DIRTY_STEPS) | 0)) k.markDirty(i);

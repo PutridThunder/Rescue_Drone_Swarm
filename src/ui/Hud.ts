@@ -7,10 +7,11 @@
 //   └────────────────┘                                          └─────────────────┘
 //   Legend                        Toolbar        PlacePopover · ResultsModal · Toast · MobileTabs
 
-import type { InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState, Weights } from "../types";
+import type { EarthObservation, InfoModes, Metrics, Scenario, SimConfig, SimEvent, SimState, Weights } from "../types";
 import { BrandHeader } from "./components/BrandHeader";
 import { DecisionFeed } from "./components/DecisionFeed";
 import { FleetList } from "./components/FleetList";
+import { DataSources } from "./components/DataSources";
 import { Legend, type ViewOptions } from "./components/Legend";
 import { MobileTabs } from "./components/MobileTabs";
 import { PlacePopover, type PlaceInfo } from "./components/PlacePopover";
@@ -50,6 +51,7 @@ export class Hud {
   private readonly feed: DecisionFeed;
   private readonly toolbar: Toolbar;
   private readonly legend: Legend;
+  private readonly sources: DataSources;
   private readonly place: PlacePopover;
   private readonly results: ResultsModal;
   private readonly toaster: Toast;
@@ -69,6 +71,7 @@ export class Hud {
 
     const left = new SidePanel(hud, "left", "Mission setup", "setup");
     this.setup = new SetupPanel(left.body, config, cb);
+    this.sources = new DataSources(left.body);
 
     const right = new SidePanel(hud, "right", "Live", "live");
     this.stats = new StatsCard(right.body);
@@ -98,6 +101,12 @@ export class Hud {
 
   setTsunamiAvailable(available: boolean) {
     this.setup.setTsunamiAvailable(available);
+  }
+
+  /** List the satellite datasets behind this area and offer the satellite image toggle. */
+  setEarthObservation(eo: EarthObservation | undefined) {
+    this.sources.show(eo?.sources ?? []);
+    this.legend.setViewAvailable("showSatellite", !!eo?.satelliteUrl);
   }
 
   setRunning(running: boolean, started: boolean) {

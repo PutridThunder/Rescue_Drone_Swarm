@@ -1,4 +1,5 @@
-// Map key plus view toggles (paths, camera footprints, street names, hidden survivors, drone cam).
+// Map key plus view toggles (paths, camera footprints, street names, satellite image, hidden
+// survivors, drone cam).
 
 import type { RenderOptions } from "../../render/scene/Renderer";
 import { $, delegate, h } from "../dom";
@@ -20,6 +21,7 @@ const VIEWS: [keyof ViewOptions, string][] = [
   ["showPaths", "Flight paths"],
   ["showSensors", "Camera view"],
   ["showLabels", "Street names"],
+  ["showSatellite", "Satellite image"],
   ["revealHidden", "Reveal hidden survivors"],
   ["showDroneCam", "Drone cam"],
 ];
@@ -38,6 +40,11 @@ export class Legend {
     );
     root.appendChild(this.el);
     delegate<HTMLInputElement>(this.el, "change", "[data-view]", (input) => onView({ [input.dataset.view as keyof ViewOptions]: input.checked }));
+  }
+
+  /** Hide a toggle the current area can't use (e.g. no satellite image). */
+  setViewAvailable(key: keyof ViewOptions, available: boolean) {
+    $<HTMLElement>(this.el, `[data-view="${key}"]`).closest("label")!.hidden = !available;
   }
 
   setDroneCamOn(on: boolean) {

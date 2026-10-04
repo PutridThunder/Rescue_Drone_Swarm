@@ -1,4 +1,6 @@
-// Builds a complete playable area (map + offline crowd intel) and lists it in public/areas/index.json.
+// Builds a complete playable area and lists it in public/areas/index.json:
+//   1. map from OpenStreetMap + elevation (fetch-world.mjs)
+//   2. gathering places + satellite layers (Python pipeline, see pipeline/README.md)
 // Usage: npm run area -- --id metrotown --name "Metrotown, Burnaby" --center 49.2266,-123.0035
 // Any option accepted by fetch-world.mjs can be passed through (--bbox, --size-km, --base).
 import { spawnSync } from "node:child_process";
@@ -12,12 +14,17 @@ if (!values.id || !values.name) {
   process.exit(1);
 }
 
-const run = (script, args) => {
-  const r = spawnSync(process.execPath, [script, ...args], { stdio: "inherit" });
+const PYTHON = ".venv/bin/python";
+const run = (command, args, options = {}) => {
+  const r = spawnSync(command, args, { stdio: "inherit", ...options });
   if (r.status !== 0) process.exit(r.status ?? 1);
 };
-run("scripts/fetch-world.mjs", argv);
-run("scripts/fetch-places.ts", ["--id", values.id]);
+if (!fs.existsSync(PYTHON)) {
+  console.error("The Python pipeline isn't set up yet. Run `npm run eo:setup` once, then try again.");
+  process.exit(1);
+}
+run(process.execPath, ["scripts/fetch-world.mjs", ...argv]);
+run(`../${PYTHON}`, ["-W", "ignore", "-m", "rescue_eo", "--area", values.id], { cwd: "pipeline" });
 
 const indexFile = "public/areas/index.json";
 const index = fs.existsSync(indexFile) ? JSON.parse(fs.readFileSync(indexFile, "utf8")) : { areas: [] };

@@ -1,0 +1,4 @@
+.data-sources ul { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.data-sources a { color: var(--text); font-size: 12px; font-weight: 600; text-decoration: none; }
+.data-sources a:hover { color: var(--accent); }
+.data-sources small { display: block; color: var(--muted); font-size: 11px; }

@@ -28,6 +28,18 @@ export interface World {
   base: { x: number; y: number }; // truck staging area
   roadName: Int16Array; // index into roadNames per cell, -1 if none
   roadNames: string[];
+  /** Satellite-derived layers on the same grid (public/areas/<id>/eo.json), when built. */
+  eo?: EarthObservation;
+}
+
+/** Open Earth-observation data resampled onto the grid by the Python pipeline (pipeline/). */
+export interface EarthObservation {
+  elevation: Float32Array; // Copernicus DEM (a surface model: includes buildings and trees), metres
+  landCover: Uint8Array; // ESA WorldCover class codes (10 trees, 30 grass, 50 built-up, 80 water...)
+  population: Float32Array; // GHSL residents per cell
+  ndwi: Float32Array; // Sentinel-2 water index, -1..1 (water above ~0.2)
+  satelliteUrl: string | null; // Sentinel-2 true-colour image of the area
+  sources: { name: string; url: string; license: string; date?: string; cloudCover?: number }[];
 }
 
 // On-disk JSON shape (public/world.json). Loader converts arrays to typed arrays.

@@ -12,6 +12,8 @@ export const REVISIT_GAP = 5;
 export const DETECT_PROB = 0.97;
 /** Looking at a high-rise from the street is less thorough than overflying a roof. */
 export const FACADE_GAIN = 0.6;
+/** Thermal cameras see through tree canopy poorly (ESA WorldCover "tree cover" cells). */
+export const CANOPY_GAIN = 0.55;
 /** Knowledge changes are reported to the renderer in steps of 1/16 confidence. */
 export const DIRTY_STEPS = 16;
 

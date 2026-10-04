@@ -11,7 +11,9 @@
     "data": "node scripts/fetch-world.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "intel:places": "node scripts/fetch-places.ts",
+    "eo:setup": "python3 -m venv .venv && .venv/bin/pip install -r pipeline/requirements.txt",
+    "eo": "cd pipeline && ../.venv/bin/python -W ignore -m rescue_eo --all",
+    "eo:test": "cd pipeline && ../.venv/bin/python -m pytest -q",
     "area": "node scripts/build-area.mjs"
   },
   "dependencies": {

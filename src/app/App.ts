@@ -9,6 +9,7 @@ import { Renderer } from "../render/scene/Renderer";
 import { AreaPicker } from "../ui/components/AreaPicker";
 import { Hud } from "../ui/Hud";
 import { areaFile, currentAreaId, importArea, loadAreaIndex, openArea } from "../world/areas";
+import { applyEarthObservation, loadEarthObservation } from "../world/earthObservation";
 import { loadMap, loadWorld } from "../world/loadWorld";
 import { hasCoastline, withScenario } from "./config";
 import { CrowdIntelController } from "./CrowdIntelController";
@@ -22,7 +23,10 @@ const MAX_FRAME_S = 0.1; // a long pause (tab hidden) doesn't fast-forward the m
 export async function startApp() {
   applyPaletteToCss();
   const areaId = currentAreaId();
-  const [world, map, areas] = await Promise.all([loadWorld(areaFile(areaId, "world.json")), loadMap(areaFile(areaId, "map.json")), loadAreaIndex()]);
+  const [mapWorld, map, areas] = await Promise.all([loadWorld(areaFile(areaId, "world.json")), loadMap(areaFile(areaId, "map.json")), loadAreaIndex()]);
+  // Satellite layers (Python pipeline output) refine the map data when the area has them.
+  const eo = await loadEarthObservation(areaId, mapWorld);
+  const world = eo ? applyEarthObservation(mapWorld, eo) : mapWorld;
   const sceneRoot = document.getElementById("scene")!;
   const hudRoot = document.getElementById("hud")!;
 
@@ -42,7 +46,7 @@ export async function startApp() {
   const hud: Hud = new Hud(
     hudRoot,
     runner.config,
-    { showPaths: true, showSensors: true, showLabels: true, revealHidden: false, showDroneCam: QUALITY.droneCamByDefault },
+    { showPaths: true, showSensors: true, showLabels: true, showSatellite: false, revealHidden: false, showDroneCam: QUALITY.droneCamByDefault },
     {
       onStartPause() {
         runner.togglePause();
@@ -80,6 +84,7 @@ export async function startApp() {
     },
   );
   hud.setTsunamiAvailable(hasCoastline(world));
+  hud.setEarthObservation(world.eo);
   hud.setRunning(false, false);
   hud.setState(runner.sim.state);
 

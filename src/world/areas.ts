@@ -15,7 +15,7 @@ export function currentAreaId(): string {
   return ID_PATTERN.test(id) ? id : DEFAULT_AREA;
 }
 
-export function areaFile(id: string, file: "world.json" | "map.json" | "places.json"): string {
+export function areaFile(id: string, file: "world.json" | "map.json" | "places.json" | "eo.json"): string {
   return `/areas/${id}/${file}`;
 }
 

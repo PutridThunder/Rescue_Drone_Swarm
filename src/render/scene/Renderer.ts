@@ -17,6 +17,8 @@ export interface RenderOptions {
   showSensors: boolean;
   showLabels: boolean;
   revealHidden: boolean;
+  /** Drape the Sentinel-2 image over the ground (only when the area has one). */
+  showSatellite: boolean;
 }
 
 const LABELS_MAX_DISTANCE = 150; // street names hide when zoomed out further
@@ -108,6 +110,7 @@ export class Renderer {
     if (o.showSensors !== undefined) this.actors.showSensors = o.showSensors;
     if (o.revealHidden !== undefined) this.actors.revealHidden = o.revealHidden;
     if (o.showLabels !== undefined) this.labelsWanted = o.showLabels;
+    if (o.showSatellite !== undefined) this.city.setSatellite(o.showSatellite);
   }
 
   /** Show what `droneId` sees in `canvas` (the drone cam window); null hides it. */

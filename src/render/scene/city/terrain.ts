@@ -1,8 +1,10 @@
-// Ground mesh: a height field with one vertex per cell corner, coloured by land cover.
+// Ground mesh: a height field with one vertex per cell corner, coloured by land cover (map data,
+// refined by ESA WorldCover when the area has satellite layers).
 
 import * as THREE from "three";
 import { Terrain } from "../../../shared/terrain";
 import type { World } from "../../../types";
+import { LandCover } from "../../../world/earthObservation";
 import { SCENE } from "../palette";
 
 const SEA_FLOOR = -0.4; // world units below sea level for all-water corners
@@ -11,6 +13,11 @@ const SHORE_DIP = -0.15; // corners that are mostly water dip below the water pl
 export function buildTerrainMesh(world: World): THREE.Mesh {
   const { width: W, height: H, cellSizeM } = world.meta;
   const { terrain, elevation } = world;
+  const cover = world.eo?.landCover;
+  // Satellite land cover finds the green that the map has no park polygon for (yards, ravines).
+  const isGreen = (i: number) =>
+    terrain[i] === Terrain.Park ||
+    (!!cover && terrain[i] === Terrain.Ground && (cover[i] === LandCover.Trees || cover[i] === LandCover.Grassland || cover[i] === LandCover.Shrubland));
   const geo = new THREE.PlaneGeometry(W, H, W, H);
   geo.rotateX(-Math.PI / 2);
   geo.translate(W / 2, 0, H / 2);
@@ -38,7 +45,7 @@ export function buildTerrainMesh(world: World): THREE.Mesh {
         cells++;
         if (terrain[i] === Terrain.Water) waterCells++;
         else height += elevation[i];
-        if (terrain[i] === Terrain.Park) parkCells++;
+        if (isGreen(i)) parkCells++;
       }
     }
     const landCells = cells - waterCells;
