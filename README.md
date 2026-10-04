@@ -40,7 +40,7 @@ This means the repo is both a simulation of present-day SAR operations and a con
 
 ### DeepSearch (Gemini) and mission weighting
 
-**DeepSearch** (Mission setup panel) asks Gemini, grounded with Google Search, how the fleet should prioritise this mission. It sends the area, its coordinates, the scenario, the time and optional notes from the operator (for example "concert at the arena, smoke on the waterfront"). Gemini returns a weight from 0.0 to 1.0 for each factor, plus a short rationale and the web sources it used:
+**DeepSearch** (Mission setup panel) asks Gemini how the fleet should prioritise this mission. With **Search the web** ticked, Gemini also checks Google Search for live events and alerts. It sends the area, its coordinates, the scenario, the time and optional notes from the operator (for example "concert at the arena, smoke on the waterfront"). Gemini returns a weight from 0.0 to 1.0 for each factor, plus a short rationale and the web sources it used:
 
 - population, hazard, urgency, unsearched area, distance cost, battery cost, avoid overlap
 
@@ -55,7 +55,15 @@ DeepSearch is the only online feature, and it is optional: the simulation itself
 | Vercel | Project > Settings > Environment Variables: `GEMINI_API_KEY` (all environments), then redeploy |
 | Local dev | `.env.local` in the repo root: `GEMINI_API_KEY=...` (see `.env.example`), then restart `npm run dev` |
 
-Optional: `GEMINI_MODEL` (default `gemini-3.8-flash`). Never name it `VITE_GEMINI_API_KEY`: anything with the `VITE_` prefix is bundled into the public JavaScript.
+**Free tier and token use.** One run costs a few hundred tokens:
+- a short prompt, low thinking, and a capped, schema-checked JSON answer;
+- web search is off by default, because it adds thousands of tokens and has its own small free quota;
+- the same question within an hour is answered from a cache, in the browser and on the server;
+- a 15 s cool-down per visitor and 4 s between any two calls keep it under free per-minute limits.
+
+Each answer shows how many tokens it used.
+
+Optional: `GEMINI_MODEL` (default `gemini-3.8-flash`). It can list several models, comma-separated: if one is out of quota or not offered to your key, the next is tried. Check https://ai.dev/rate-limit for the models with free quota on your key. Never name it `VITE_GEMINI_API_KEY`: anything with the `VITE_` prefix is bundled into the public JavaScript.
 
 ## How the system works
 

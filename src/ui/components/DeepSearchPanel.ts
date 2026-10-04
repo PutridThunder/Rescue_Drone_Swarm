@@ -6,7 +6,7 @@ import { $, escapeHtml, h, safeUrl } from "../dom";
 import "./DeepSearchPanel.css";
 
 export interface DeepSearchCallbacks {
-  onRun(description: string): void;
+  onRun(description: string, webSearch: boolean): void;
   onReset(): void;
 }
 
@@ -17,8 +17,9 @@ export class DeepSearchPanel {
     this.el = h(
       "section",
       "deepsearch",
-      `<h3>DeepSearch <em>Gemini + web search sets the priorities</em></h3>
-       <textarea rows="2" maxlength="600" placeholder="Optional: what happened? e.g. earthquake at 6 pm, concert at the arena, smoke on the waterfront"></textarea>
+      `<h3>DeepSearch <em>Gemini sets the priorities</em></h3>
+       <textarea rows="2" maxlength="300" placeholder="Optional: what happened? e.g. earthquake at 6 pm, concert at the arena, smoke on the waterfront"></textarea>
+       <label class="check deepsearch-web"><input type="checkbox"> Search the web for live events <em>(uses more free quota)</em></label>
        <div class="deepsearch-actions">
          <button class="btn primary" data-action="run">Run DeepSearch</button>
          <button class="btn" data-action="reset" hidden>Default weights</button>
@@ -27,14 +28,16 @@ export class DeepSearchPanel {
        <div class="deepsearch-result" hidden></div>`,
     );
     root.appendChild(this.el);
-    $(this.el, '[data-action="run"]').addEventListener("click", () => cb.onRun($<HTMLTextAreaElement>(this.el, "textarea").value));
+    $(this.el, '[data-action="run"]').addEventListener("click", () =>
+      cb.onRun($<HTMLTextAreaElement>(this.el, "textarea").value, $<HTMLInputElement>(this.el, ".deepsearch-web input").checked),
+    );
     $(this.el, '[data-action="reset"]').addEventListener("click", () => cb.onReset());
   }
 
   setBusy(busy: boolean) {
     const run = $<HTMLButtonElement>(this.el, '[data-action="run"]');
     run.disabled = busy;
-    run.textContent = busy ? "Searching the web…" : "Run DeepSearch";
+    run.textContent = busy ? "Asking Gemini…" : "Run DeepSearch";
     if (busy) this.status(null);
   }
 

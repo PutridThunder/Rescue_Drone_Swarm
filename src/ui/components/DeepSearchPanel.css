@@ -11,3 +11,5 @@
 .deepsearch-weights output { color: var(--text); font-weight: 600; text-align: right; }
 .deepsearch-sources { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .deepsearch-sources a { max-width: 100%; padding: 2px 8px; overflow: hidden; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font-size: 11px; text-decoration: none; white-space: nowrap; text-overflow: ellipsis; }
+.deepsearch-web { display: flex; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.deepsearch-web em { color: var(--muted); font-style: normal; }

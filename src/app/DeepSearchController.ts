@@ -20,12 +20,12 @@ export class DeepSearchController {
     private readonly hud: Hud,
   ) {
     this.panel = new DeepSearchPanel(hud.deepSearchSlot, {
-      onRun: (description) => void this.run(description),
+      onRun: (description, webSearch) => void this.run(description, webSearch),
       onReset: () => this.reset(),
     });
   }
 
-  private async run(description: string) {
+  private async run(description: string, webSearch: boolean) {
     if (this.busy) return;
     this.busy = true;
     this.panel.setBusy(true);
@@ -38,11 +38,13 @@ export class DeepSearchController {
         scenario: this.runner.config.scenario,
         coastal: hasCoastline(this.world),
         description,
-        localTime: new Date().toString(),
+        localTime: hourLabel(new Date()),
+        webSearch,
       });
       this.runner.applyLive({ weights: toPlannerWeights(result.weights) });
       this.panel.showResult(result);
-      this.panel.status(`Applied to the mission · ${result.model}`);
+      const cost = result.cached ? "cached, no tokens used" : result.tokens != null ? `${result.tokens.toLocaleString()} tokens` : "";
+      this.panel.status(`Applied to the mission · ${result.model}${cost ? ` · ${cost}` : ""}`);
       this.hud.toast("DeepSearch priorities applied");
     } catch (err) {
       this.panel.status((err as Error).message, true);
@@ -57,4 +59,11 @@ export class DeepSearchController {
     this.panel.clearResult();
     this.panel.status("Back to the default priorities");
   }
+}
+
+/** "Sat 3 Oct 2026, 18:00": hour precision is enough, and keeps repeat requests cacheable. */
+function hourLabel(d: Date): string {
+  const at = new Date(d);
+  at.setMinutes(0, 0, 0);
+  return at.toLocaleString("en-CA", { weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
