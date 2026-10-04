@@ -38,32 +38,9 @@ In the current project, the logic is demonstrated in search-and-rescue scenarios
 
 This means the repo is both a simulation of present-day SAR operations and a conceptual platform for real-time disaster intelligence and autonomy in future field deployments.
 
-### DeepSearch (Gemini) and mission weighting
+### Mission weighting
 
-**DeepSearch** (Mission setup panel) asks Gemini how the fleet should prioritise this mission. With **Search the web** ticked, Gemini also checks Google Search for live events and alerts. It sends the area, its coordinates, the scenario, the time and optional notes from the operator (for example "concert at the arena, smoke on the waterfront"). Gemini returns a weight from 0.0 to 1.0 for each factor, plus a short rationale and the web sources it used:
-
-- population, hazard, urgency, unsearched area, distance cost, battery cost, avoid overlap
-
-0.5 means normal priority: it maps to the planner's tuned default weight. 1.0 doubles it and 0.0 turns it off (`src/intel/deepSearch.ts`). The weights apply to the running mission at once. **Default weights** goes back to the tuned defaults. The prompt is in `api/deepsearch.ts` (spec: [DeepSearch_prompt.md](./DeepSearch_prompt.md)).
-
-DeepSearch is the only online feature, and it is optional: the simulation itself runs offline and works the same without it.
-
-**Setup.** The Gemini key stays on the server. `api/deepsearch.ts` is a Vercel function, and the Vite dev server serves the same handler.
-
-| Where | What to set |
-|---|---|
-| Vercel | Project > Settings > Environment Variables: `GEMINI_API_KEY` (all environments), then redeploy |
-| Local dev | `.env.local` in the repo root: `GEMINI_API_KEY=...` (see `.env.example`), then restart `npm run dev` |
-
-**Free tier and token use.** One run costs a few hundred tokens:
-- a short prompt, low thinking, and a capped, schema-checked JSON answer;
-- web search is off by default, because it adds thousands of tokens and has its own small free quota;
-- the same question within an hour is answered from a cache, in the browser and on the server;
-- a 15 s cool-down per visitor and 4 s between any two calls keep it under free per-minute limits.
-
-Each answer shows how many tokens it used.
-
-Optional: `GEMINI_MODEL` (default `gemini-3.8-flash`). It can list several models, comma-separated: if one is out of quota or not offered to your key, the next is tried. Check https://ai.dev/rate-limit for the models with free quota on your key. Never name it `VITE_GEMINI_API_KEY`: anything with the `VITE_` prefix is bundled into the public JavaScript.
+Each block is scored by population, hazard, urgency and unsearched area, minus distance, battery and overlap costs. The weights are tuned defaults in `src/sim/defaults.ts`; they are part of the simulation logic and not edited in the UI.
 
 ## How the system works
 
@@ -137,7 +114,6 @@ server/areas/         dev-server support for importing new areas
 scripts/              area-data generation tools
 public/areas/         bundled area datasets
 public/intel/         event and crowd-intel data
-DeepSearch_prompt.md  coordinate-based mission-priority prompt template
 ```
 
 ## Future-facing vision

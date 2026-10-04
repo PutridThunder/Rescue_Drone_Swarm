@@ -36,8 +36,6 @@ const SLIDERS: [NumericKey, string, number, number, number, (v: number) => strin
 export class SetupPanel {
   /** Where the crowd intel section is mounted. */
   readonly intelSlot: HTMLElement;
-  /** Where the DeepSearch section is mounted. */
-  readonly deepSearchSlot: HTMLElement;
   private config: SimConfig;
 
   constructor(
@@ -65,9 +63,7 @@ export class SetupPanel {
       ),
     );
     this.intelSlot = h("div", "setup-intel");
-    this.deepSearchSlot = h("div", "setup-intel");
     root.append(
-      this.deepSearchSlot,
       this.intelSlot,
       h(
         "section",

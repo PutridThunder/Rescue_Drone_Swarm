@@ -14,7 +14,6 @@ import { loadMap, loadWorld } from "../world/loadWorld";
 import { hasCoastline, withScenario } from "./config";
 import { ChallengeController } from "./ChallengeController";
 import { CrowdIntelController } from "./CrowdIntelController";
-import { DeepSearchController } from "./DeepSearchController";
 import { DroneCamController } from "./DroneCamController";
 import { MapTools } from "./MapTools";
 import { MissionRunner } from "./MissionRunner";
@@ -96,7 +95,6 @@ export async function startApp() {
     hud.toast(area ? `Search area set: ${km(area.r)} km radius. Survivors are somewhere inside.` : "Searching the whole map again");
   });
   const challenge = new ChallengeController(runner, droneCam, hud, restart);
-  new DeepSearchController(world, runner, hud);
 
   const picker = new AreaPicker(hud.brand.areaButton, areas, areaId, {
     onSelect: openArea,

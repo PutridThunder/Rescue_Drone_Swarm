@@ -96,11 +96,6 @@ export class Hud {
     return this.setup.intelSlot;
   }
 
-  /** Where the DeepSearch section is mounted (inside mission setup). */
-  get deepSearchSlot(): HTMLElement {
-    return this.setup.deepSearchSlot;
-  }
-
   setConfig(config: SimConfig) {
     this.setup.setConfig(config);
   }
