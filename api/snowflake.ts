@@ -38,10 +38,13 @@ class HttpError extends Error {
   readonly status: number;
   /** The Overture views aren't in Snowflake yet (or the app can't read them). */
   readonly overtureMissing: boolean;
-  constructor(status: number, message: string, overtureMissing = false) {
+  /** A table or view that doesn't exist yet, e.g. "AREAS". */
+  readonly missingObject: string | null;
+  constructor(status: number, message: string, overtureMissing = false, missingObject: string | null = null) {
     super(message);
     this.status = status; // (no parameter properties: Node runs this file directly in scripts)
     this.overtureMissing = overtureMissing;
+    this.missingObject = missingObject;
   }
 }
 
@@ -92,9 +95,15 @@ let cachedAreas: { at: number; areas: StoredArea[] } | null = null;
 async function listAreas(): Promise<StoredArea[]> {
   if (cachedAreas && Date.now() - cachedAreas.at < 60_000) return cachedAreas.areas;
   // One row per area even if two uploads raced (the newest wins).
-  const rows = await query(
-    `SELECT AREA_ID, NAME, SOUTH, WEST, NORTH, EAST, VERSION FROM AREAS QUALIFY ROW_NUMBER() OVER (PARTITION BY AREA_ID ORDER BY VERSION DESC) = 1 ORDER BY NAME`,
-  );
+  let rows: Row[];
+  try {
+    rows = await query(
+      `SELECT AREA_ID, NAME, SOUTH, WEST, NORTH, EAST, VERSION FROM AREAS QUALIFY ROW_NUMBER() OVER (PARTITION BY AREA_ID ORDER BY VERSION DESC) = 1 ORDER BY NAME`,
+    );
+  } catch (err) {
+    if (err instanceof HttpError && err.missingObject === "AREAS") return []; // map tables not set up yet: built-in areas still work
+    throw err;
+  }
   const areas: StoredArea[] = rows.map((r) => ({ id: String(r.AREA_ID), name: String(r.NAME), bbox: [n(r.SOUTH), n(r.WEST), n(r.NORTH), n(r.EAST)], version: n(r.VERSION) }));
   cachedAreas = { at: Date.now(), areas };
   return areas;
@@ -529,6 +538,13 @@ async function call(url: string, init: RequestInit): Promise<{ status: number; j
   const json = ((await res.json().catch(() => null)) ?? {}) as SqlApiBody;
   if (!res.ok) {
     console.error("Snowflake error", res.status, json.message);
+    // A table or view the app needs isn't there yet: say which setup file creates it.
+    const missing = /Object '([A-Z_.]+)' does not exist or not authorized/i.exec(json.message ?? "")?.[1]?.split(".").pop()?.toUpperCase();
+    if (missing) {
+      const overture = missing.startsWith("OV_");
+      const file = overture ? "snowflake/overture.sql (after getting the Overture Maps listings)" : "the latest snowflake/setup.sql (safe to run again)";
+      throw new HttpError(503, `Snowflake's ${missing} does not exist yet: run ${file}.`, overture, missing);
+    }
     if (res.status === 401 || res.status === 403) throw new HttpError(502, `Snowflake refused the token (${res.status}): ${json.message ?? "check SNOWFLAKE_TOKEN and its expiry"}`);
     throw new HttpError(502, `Snowflake error ${res.status}: ${json.message ?? res.statusText}`);
   }

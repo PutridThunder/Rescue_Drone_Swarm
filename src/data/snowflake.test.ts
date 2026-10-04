@@ -100,6 +100,16 @@ describe("Snowflake storage", () => {
     expect(fetchMock.mock.calls.length).toBe(calls);
   });
 
+  it("names the setup file when a table is missing, and lists no areas instead of failing", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "SQL compilation error: Object 'AREAS' does not exist or not authorized." }, { status: 422 })));
+    const list = await GET(new Request("http://x/api/snowflake?areas"));
+    expect(list.status).toBe(200);
+    expect((await list.json()).areas).toEqual([]);
+    const file = await GET(new Request("http://x/api/snowflake?area=p-1-2&file=world.json"));
+    expect(file.status).toBe(503);
+    expect((await file.json()).error).toMatch(/setup\.sql/);
+  });
+
   it("explains a refused token", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Response.json({ message: "Programmatic access token is invalid." }, { status: 401 })));
     const res = await POST(post(MISSION, "7.7.7.7"));
