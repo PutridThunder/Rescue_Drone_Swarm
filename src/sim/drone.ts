@@ -1,4 +1,5 @@
 import type { DroneStatus, DroneView } from "../types";
+import type { Waypoint } from "./sweepPlan";
 
 export const TRAIL_MAX = 300;
 
@@ -17,6 +18,8 @@ export class Drone implements DroneView {
   commitment = 0;
   chargeFrom = 1; // battery fraction when charging started
   lastCell = -1;
+  /** Remaining lawnmower waypoints through the current block. */
+  sweep: { sector: number; waypoints: Waypoint[] } | null = null;
   private trailAcc = 0;
 
   constructor(

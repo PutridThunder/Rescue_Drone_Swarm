@@ -30,6 +30,8 @@ export const CHARGE_TIME = 4;
 export const FULL_BATTERY = 0.98;
 /** Only announce a recharge if the drone came in below this battery fraction. */
 export const ANNOUNCE_RECHARGE_BELOW = 0.8;
+/** Below this battery share a drone always heads to a truck, however close it is. */
+export const RECALL_BATTERY = 0.2;
 /** Reserve kept for the trip home: a fixed part plus a share of capacity. */
 export const RESERVE_BASE_CELLS = 3;
 export const RESERVE_CAPACITY_SHARE = 0.04;
@@ -39,6 +41,12 @@ export const HAZARD_PATH_COST = 0.5;
 export const DIRECT_FLIGHT_RANGE = 12;
 
 // --- In-block sweep -------------------------------------------------------------------------
+/** Lawnmower lanes: spacing as a share of sensor range (camera confidence fades toward the edge). */
+export const LANE_SPACING_SHARE = 1.25;
+/** Distance between waypoints along a lane (cells). */
+export const LANE_STEP = 3;
+/** A waypoint is skipped when every cell within this radius is already searched. */
+export const LANE_SKIP_RADIUS = 2;
 /** Ignore candidate cells closer than this (the drone is already there). */
 export const SWEEP_MIN_DIST = 0.7;
 /** Sweep score = dist * (SWEEP_TURN_BASE - SWEEP_TURN_WEIGHT * cos(turn)): prefer going straight. */

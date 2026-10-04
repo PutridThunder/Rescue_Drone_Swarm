@@ -6,9 +6,13 @@ import {
   DOCK_REPLAN_DELAY,
   FULL_BATTERY,
   HOVER_DRAIN,
+  RECALL_BATTERY,
   RESERVE_BASE_CELLS,
   RESERVE_CAPACITY_SHARE,
   SEARCHED_THRESHOLD,
+  LANE_SKIP_RADIUS,
+  LANE_SPACING_SHARE,
+  LANE_STEP,
   SWEEP_MIN_DIST,
   SWEEP_TURN_BASE,
   SWEEP_TURN_WEIGHT,
@@ -17,6 +21,7 @@ import {
 import type { SimContext } from "./context";
 import type { Drone } from "./drone";
 import { messages } from "./messages";
+import { planLanes } from "./sweepPlan";
 import { insideSector, SECTOR_DONE, type Sector } from "./tasks";
 import type { Truck } from "./truck";
 
@@ -51,7 +56,8 @@ export class DroneController {
     }
 
     if (d.status === "TRAVELLING" || d.status === "SEARCHING" || d.status === "IDLE") {
-      if (d.batteryCells < ctx.depot.distanceToNearest(d.x, d.y) * DETOUR + this.reserve) this.recallForCharge(d);
+      const needed = ctx.depot.distanceToNearest(d.x, d.y) * DETOUR + this.reserve;
+      if (d.battery < RECALL_BATTERY || d.batteryCells < needed) this.recallForCharge(d);
     }
 
     const moved = d.advance(ctx.cfg.speed * dt);
@@ -99,6 +105,7 @@ export class DroneController {
     if (d.taskId == null) return;
     this.ctx.sectors.release(d.taskId, d.id, d.commitment);
     d.taskId = null;
+    d.sweep = null;
   }
 
   /** Landed: ride along with the truck and charge if needed. */
@@ -116,10 +123,47 @@ export class DroneController {
     this.ctx.replan.soon();
   }
 
-  /** In-block sweep: fly to the nearest unsearched cell, preferring to keep going straight. */
+  /** In-block sweep: fly the lawnmower lanes, then clean up whatever they left unsearched. */
   private sweepNext(d: Drone) {
+    const s = this.ctx.sectors.get(d.taskId!);
+    if (d.sweep?.sector !== s.id) {
+      const spacing = Math.max(2, Math.round(this.ctx.cfg.sensorRange * LANE_SPACING_SHARE));
+      d.sweep = { sector: s.id, waypoints: planLanes(s, d.x, d.y, spacing, LANE_STEP) };
+    }
+    if (!this.nextLaneWaypoint(d)) this.cleanupNext(d, s);
+  }
+
+  /** Head for the next lane waypoint that still has unsearched cells around it. */
+  private nextLaneWaypoint(d: Drone): boolean {
     const { ctx } = this;
-    const s = ctx.sectors.get(d.taskId!);
+    const waypoints = d.sweep!.waypoints;
+    while (waypoints.length > 0) {
+      const { x, y } = waypoints.shift()!;
+      const i = y * ctx.W + x;
+      if (ctx.navBlocked[i] || ctx.unreachable[i] || !this.needsLook(x, y)) continue;
+      if (Math.hypot(x + 0.5 - d.x, y + 0.5 - d.y) < SWEEP_MIN_DIST) continue;
+      if (ctx.nav.planPath(d, x, y)) return true;
+      ctx.unreachable[i] = 1;
+    }
+    return false;
+  }
+
+  /** True if any coverage cell near (x, y) is not yet searched. */
+  private needsLook(x: number, y: number): boolean {
+    const { ctx } = this;
+    const r = LANE_SKIP_RADIUS;
+    for (let yy = Math.max(0, y - r); yy <= Math.min(ctx.H - 1, y + r); yy++) {
+      for (let xx = Math.max(0, x - r); xx <= Math.min(ctx.W - 1, x + r); xx++) {
+        const i = yy * ctx.W + xx;
+        if (ctx.knowledge.searched[i] < SEARCHED_THRESHOLD && ctx.countsForCoverage(i)) return true;
+      }
+    }
+    return false;
+  }
+
+  /** After the lanes: fly to the nearest unsearched cell, preferring to keep going straight. */
+  private cleanupNext(d: Drone, s: Sector) {
+    const { ctx } = this;
     const { searched } = ctx.knowledge;
     const hx = Math.cos(d.heading);
     const hy = Math.sin(d.heading);
@@ -194,6 +238,7 @@ export class DroneController {
     ctx.log.emit("taskComplete", messages.blockFinished(d.id, s.view.label, pct, exhausted), d.id, s.id);
     s.view.assignedDrone = null;
     d.taskId = null;
+    d.sweep = null;
     d.status = "IDLE";
     d.path = [];
     ctx.replan.soon(); // routine: the assignment events speak for themselves

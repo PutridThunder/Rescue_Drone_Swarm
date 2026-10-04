@@ -52,10 +52,12 @@ export class TruckDepot {
     return nearestHome(this.trucks, x, y);
   }
 
-  /** Drive trucks along their routes. */
+  /** Drive trucks along their routes. A truck waits while a low-battery drone is flying to it. */
   drive(dt: number) {
     const step = this.ctx.cfg.speed * TRUCK_SPEED_FRAC * dt;
-    for (const t of this.trucks) t.advance(step);
+    const awaited = new Set<Truck>();
+    for (const d of this.ctx.fleet) if (d.airborne && d.status === "LOW_BATTERY") awaited.add(this.nearest(d.x, d.y));
+    for (const t of this.trucks) if (!awaited.has(t)) t.advance(step);
   }
 
   /** Reposition trucks every TRUCK_REPLAN seconds. */

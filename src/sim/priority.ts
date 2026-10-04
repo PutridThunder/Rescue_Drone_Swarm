@@ -27,6 +27,9 @@ export interface TermContext {
   timePressure: number; // 0..1, rises as impact approaches; 0 after impact
 }
 
+/** Blocks on the edge of explored space are worth a little more (they reveal the map). */
+const FRONTIER_INFO = 1.25;
+
 export function emptyAgg(): SectorAgg {
   return {
     believed: 0,
@@ -41,30 +44,28 @@ export function emptyAgg(): SectorAgg {
   };
 }
 
-/** Benefit terms, each normalized to 0..1 across the candidate set. */
+/**
+ * Benefit terms, each normalized to 0..1 across the candidate set.
+ *
+ * Terms are densities (per unsearched cell), i.e. value per second of searching. Totals would
+ * make a half-searched block look half as valuable as a fresh one, so the fleet would skip the
+ * blocks its cameras already brushed and leave a checkerboard of gaps to fly back to later.
+ */
 export function computeTerms(aggs: SectorAgg[], ctx: TermContext): Terms[] {
-  let maxPop = 0;
-  let maxHaz = 0;
-  let maxFlood = 0;
-  let maxInfo = 0;
-  let maxRescue = 0;
-  const hazMean = new Float64Array(aggs.length);
-  const info = new Float64Array(aggs.length);
-  aggs.forEach((a, i) => {
-    hazMean[i] = a.unsearched > 0 ? a.hazard / a.unsearched : 0;
-    info[i] = a.unsearched * (a.frontier ? 1.25 : 1);
-    maxPop = Math.max(maxPop, a.population);
-    maxHaz = Math.max(maxHaz, hazMean[i]);
-    maxFlood = Math.max(maxFlood, a.flood);
-    maxInfo = Math.max(maxInfo, info[i]);
-    maxRescue = Math.max(maxRescue, a.rescue);
-  });
+  const per = (value: number, a: SectorAgg) => (a.unsearched > 0 ? value / a.unsearched : 0);
+  const pop = aggs.map((a) => per(a.population, a));
+  const haz = aggs.map((a) => per(a.hazard, a));
+  const flood = aggs.map((a) => per(a.flood, a));
+  const rescue = aggs.map((a) => per(a.rescue, a));
+  const info = aggs.map((a) => (a.unsearched > 0 ? (a.frontier ? FRONTIER_INFO : 1) : 0));
+  const max = (xs: number[]) => xs.reduce((m, x) => Math.max(m, x), 0);
+  const [maxPop, maxHaz, maxFlood, maxRescue, maxInfo] = [pop, haz, flood, rescue, info].map(max);
   return aggs.map((a, i) => ({
-    population: norm(a.population, maxPop),
-    hazard: ctx.useHazard ? norm(hazMean[i], maxHaz) : 0,
-    urgency: ctx.useUrgency ? norm(a.flood, maxFlood) * ctx.timePressure : 0,
+    population: norm(pop[i], maxPop),
+    hazard: ctx.useHazard ? norm(haz[i], maxHaz) : 0,
+    urgency: ctx.useUrgency ? norm(flood[i], maxFlood) * ctx.timePressure : 0,
     information: norm(info[i], maxInfo),
-    rescue: Math.min(1, norm(a.rescue, maxRescue) + a.boost),
+    rescue: Math.min(1, norm(rescue[i], maxRescue) + a.boost),
   }));
 }
 

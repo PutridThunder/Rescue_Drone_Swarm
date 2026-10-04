@@ -3,6 +3,7 @@ import { allocate, type AllocDrone, type AllocTask, type Assignment } from "./al
 import {
   COMPLETE_COVERAGE,
   HYSTERESIS,
+  RECALL_BATTERY,
   RELEASED_BONUS,
   SPREAD_RADIUS,
   SWEEP_EFFICIENCY,
@@ -55,7 +56,11 @@ export class Planner {
 
     const scored = this.score(candidates, aggs);
     const available = ctx.fleet.filter(
-      (d) => d.active && !d.charging && (d.status === "IDLE" || d.status === "TRAVELLING" || d.status === "SEARCHING" || d.status === "RETURNING"),
+      (d) =>
+        d.active &&
+        !d.charging &&
+        !(d.airborne && d.battery < RECALL_BATTERY) && // low drones fly home first
+        (d.status === "IDLE" || d.status === "TRAVELLING" || d.status === "SEARCHING" || d.status === "RETURNING"),
     );
     const assignments = this.auction(available, scored);
     const { changes, distance } = this.applyAssignments(available, assignments, scored);
