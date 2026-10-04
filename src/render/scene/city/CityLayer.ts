@@ -47,7 +47,7 @@ export class CityLayer {
       this.buildings = new Buildings(map, this.heights);
       this.labels = new StreetLabels(map, this.heights);
       this.roads = buildRoads(map, this.heights);
-      this.group.add(this.roads, this.buildings.mesh, this.labels.group);
+      this.group.add(this.roads, this.buildings.mesh, this.buildings.outlines, this.labels.group);
       this.pickables.push(this.buildings.mesh);
     }
   }

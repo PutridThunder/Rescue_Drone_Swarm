@@ -11,6 +11,7 @@ export const SCENE = {
   buildingSearched: 0xffffff,
   buildingTall: 0xb3bfd0, // above flight altitude: drones must go around
   buildingHazard: 0xf1b3a6,
+  buildingEdge: 0x6d7687, // roof outlines and corners
   buildingOutsideArea: 0x9aa1ad, // outside the drawn search circle
   fogUnknown: [0x6b7385, 0.5] as const,
   fogUnsearched: [0x8d97a8, 0.2] as const,

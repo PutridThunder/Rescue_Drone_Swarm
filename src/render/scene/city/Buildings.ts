@@ -1,9 +1,11 @@
 // Buildings extruded from real OSM footprints. Each building is recoloured as the fleet searches
-// the cells under it: grey (not searched) -> white (searched), tinted in hazard zones.
+// the cells under it: grey (not searched) -> white (searched), tinted in hazard zones. Windows,
+// shading and outlines come from buildingMaterial.ts and a merged outline mesh.
 
 import * as THREE from "three";
 import type { MapJSON, SimState } from "../../../types";
 import { SCENE } from "../palette";
+import { createBuildingMaterial } from "./buildingMaterial";
 import type { HeightField } from "./HeightField";
 
 const SEARCHED = 0.8; // same threshold as the simulation
@@ -20,6 +22,8 @@ interface BuildingRange {
 
 export class Buildings {
   readonly mesh: THREE.Mesh;
+  /** Roof outlines (one draw call for the whole city). */
+  readonly outlines: THREE.LineSegments;
   private readonly ranges: BuildingRange[] = [];
   private readonly byCell = new Map<number, number[]>();
   private readonly colors: THREE.BufferAttribute;
@@ -29,6 +33,10 @@ export class Buildings {
 
   constructor(map: MapJSON, heights: HeightField) {
     const positions: number[] = [];
+    const facade: number[] = []; // per vertex: metres along the wall, metres above the base (-1 on roofs)
+    const tint: number[] = []; // per vertex: building brightness variation
+    const lines: number[] = [];
+    const m = heights.metresPerUnit;
     for (const { p, h } of map.buildings) {
       const ring = toRing(p);
       if (!ring) continue;
@@ -37,15 +45,26 @@ export class Buildings {
       base -= BASE_SINK;
       const top = base + BASE_SINK + heights.units(Math.max(MIN_HEIGHT_M, h));
       const start = positions.length / 3;
+      const wallTop = (top - base - BASE_SINK) * m; // metres
+      const sink = -BASE_SINK * m;
+      let along = 0; // metres along the perimeter
       for (let i = 0; i < ring.length; i++) {
         const a = ring[i];
         const c = ring[(i + 1) % ring.length];
-        positions.push(a.x, base, a.y, c.x, base, c.y, c.x, top, c.y, a.x, base, a.y, c.x, top, c.y, a.x, top, a.y);
+        const len = a.distanceTo(c) * m;
+        // Wound so the wall faces outward (the ring is counter-clockwise in x/south).
+        positions.push(a.x, base, a.y, c.x, top, c.y, c.x, base, c.y, a.x, base, a.y, a.x, top, a.y, c.x, top, c.y);
+        facade.push(along, sink, along + len, wallTop, along + len, sink, along, sink, along, wallTop, along + len, wallTop);
+        along += len;
+        lines.push(a.x, top, a.y, c.x, top, c.y); // roof edge
       }
       for (const [i0, i1, i2] of THREE.ShapeUtils.triangulateShape(ring, [])) {
         // The ring is in (x, y = south); flip the winding so roofs face up in x/z.
         positions.push(ring[i0].x, top, ring[i0].y, ring[i2].x, top, ring[i2].y, ring[i1].x, top, ring[i1].y);
+        facade.push(-1, -1, -1, -1, -1, -1);
       }
+      const variation = 0.94 + 0.12 * hash(ring[0].x, ring[0].y);
+      for (let v = start; v < positions.length / 3; v++) tint.push(variation);
       const b = this.ranges.length;
       const cells = footprintCells(ring, heights.W, heights.H);
       this.ranges.push({ start, count: positions.length / 3 - start, heightM: h, cells });
@@ -60,10 +79,16 @@ export class Buildings {
     this.colors = new THREE.BufferAttribute(new Uint8Array(positions.length), 3, true);
     this.colors.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute("color", this.colors);
+    geo.setAttribute("facade", new THREE.Float32BufferAttribute(facade, 2));
+    geo.setAttribute("tint", new THREE.Float32BufferAttribute(tint, 1));
     geo.computeVertexNormals();
-    this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
+    this.mesh = new THREE.Mesh(geo, createBuildingMaterial());
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
+
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(lines, 3));
+    this.outlines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({ color: SCENE.buildingEdge, transparent: true, opacity: 0.45 }));
   }
 
   /** Mark the buildings over a changed cell for repainting. */
@@ -161,4 +186,10 @@ function footprintCells(ring: THREE.Vector2[], W: number, H: number): Int32Array
     out.push(y * W + x);
   }
   return Int32Array.from(out);
+}
+
+/** Deterministic 0..1 value from a position (stable per-building variation). */
+function hash(x: number, y: number): number {
+  const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
+  return s - Math.floor(s);
 }
